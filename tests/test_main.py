@@ -30,6 +30,7 @@ def test_main_search_prints_json(mock_multi_search, capsys) -> None:
             snippet="snippet 1",
             source="x",
             timestamp="2026-04-02T00:00:00Z",
+            summary="top summary",
         )
     ]
 
@@ -48,5 +49,6 @@ def test_main_search_prints_json(mock_multi_search, capsys) -> None:
             "snippet": "snippet 1",
             "source": "x",
             "timestamp": "2026-04-02T00:00:00Z",
+            "summary": "top summary",
         }
     ]

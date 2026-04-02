@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import json
+from datetime import datetime, timezone
 import re
-from urllib.parse import quote, unquote
+from typing import Any
+
+import httpx
 
 from web_prime_search.config import Settings, get_settings
 from web_prime_search.models import SearchResult
 from web_prime_search.proxy import get_http_client
-
-_SEARCH_URL = "https://www.douyin.com/search/{query}?type=video"
 
 
 async def search(
@@ -19,133 +19,236 @@ async def search(
     if settings is None:
         settings = get_settings()
 
-    headers: dict[str, str] = {
-        "Referer": "https://www.douyin.com/",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    }
-    if settings.douyin_cookie:
-        headers["Cookie"] = settings.douyin_cookie
+    if not settings.volcengine_api_key:
+        raise ValueError("Volcengine API key is not configured")
+    if not settings.volcengine_web_search_model:
+        raise ValueError("Volcengine web search model is not configured")
 
     client = get_http_client("douyin", settings)
     try:
-        url = _SEARCH_URL.format(query=quote(query, safe=""))
-        resp = await client.get(url, headers=headers)
+        try:
+            response = await client.post(
+                settings.volcengine_responses_url,
+                headers={
+                    "Authorization": f"Bearer {settings.volcengine_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": settings.volcengine_web_search_model,
+                    "stream": False,
+                    "tools": [{"type": "web_search"}],
+                    "input": query,
+                },
+            )
+        except httpx.TimeoutException as exc:
+            raise ValueError("Volcengine API request timed out") from exc
 
-        if resp.status_code != 200:
-            raise ValueError(f"Douyin search error: HTTP {resp.status_code}")
+        if response.status_code != 200:
+            raise ValueError(
+                f"Douyin search error: {_extract_error_message(response)}"
+            )
 
-        html = resp.text
-        results = _parse_render_data(html)
-
+        payload = response.json()
+        response_summary = _extract_output_summary(payload)
+        results = _parse_reference_results(payload.get("references"))
         if not results:
-            results = _parse_regex_fallback(html)
+            results = _parse_output_annotation_results(payload)
+        if not results:
+            results = _parse_action_detail_results(payload)
+
+        if response_summary:
+            for result in results:
+                result.summary = response_summary
 
         return results[:max_results]
     finally:
         await client.aclose()
 
 
-def _parse_render_data(html: str) -> list[SearchResult]:
-    match = re.search(
-        r'<script\s+id="RENDER_DATA"\s*[^>]*>(.*?)</script>',
-        html,
-        re.DOTALL,
-    )
-    if not match:
-        return []
-
+def _extract_error_message(response: Any) -> str:
     try:
-        raw = unquote(match.group(1))
-        data = json.loads(raw)
-    except (json.JSONDecodeError, ValueError):
+        payload = response.json()
+    except ValueError:
+        return f"HTTP {response.status_code}"
+
+    message = None
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if isinstance(error, dict):
+        message = error.get("message") or error.get("type")
+    elif isinstance(error, str):
+        message = error
+
+    if message is None and isinstance(payload, dict):
+        raw_message = payload.get("message")
+        if isinstance(raw_message, str) and raw_message:
+            message = raw_message
+
+    if message:
+        return f"HTTP {response.status_code}: {message}"
+    return f"HTTP {response.status_code}"
+
+
+def _parse_reference_results(references: object) -> list[SearchResult]:
+    if not isinstance(references, list):
+        return []
+    return _build_search_results(references)
+
+
+def _parse_output_annotation_results(payload: object) -> list[SearchResult]:
+    if not isinstance(payload, dict):
         return []
 
-    return _extract_from_data(data)
+    output = payload.get("output")
+    if not isinstance(output, list):
+        return []
 
-
-def _extract_from_data(
-    data: object,
-    *,
-    max_depth: int = 25,
-    _depth: int = 0,
-    _seen_ids: set[int] | None = None,
-) -> list[SearchResult]:
-    results: list[SearchResult] = []
-
-    if _depth >= max_depth:
-        return results
-
-    if _seen_ids is None:
-        _seen_ids = set()
-
-    if isinstance(data, dict):
-        data_id = id(data)
-        if data_id in _seen_ids:
-            return results
-        _seen_ids.add(data_id)
-
-        # Look for aweme_id which indicates a video entry
-        if "aweme_id" in data:
-            aweme_id = data["aweme_id"]
-            desc = data.get("desc", "")
-            title = desc or str(aweme_id)
-            results.append(
-                SearchResult(
-                    title=title,
-                    url=f"https://www.douyin.com/video/{aweme_id}",
-                    snippet=desc or title,
-                    source="douyin",
-                )
-            )
-        else:
-            for value in data.values():
-                results.extend(
-                    _extract_from_data(
-                        value,
-                        max_depth=max_depth,
-                        _depth=_depth + 1,
-                        _seen_ids=_seen_ids,
-                    )
-                )
-    elif isinstance(data, list):
-        data_id = id(data)
-        if data_id in _seen_ids:
-            return results
-        _seen_ids.add(data_id)
-
-        for item in data:
-            results.extend(
-                _extract_from_data(
-                    item,
-                    max_depth=max_depth,
-                    _depth=_depth + 1,
-                    _seen_ids=_seen_ids,
-                )
-            )
-
-    return results
-
-
-def _parse_regex_fallback(html: str) -> list[SearchResult]:
-    results: list[SearchResult] = []
-    seen: set[str] = set()
-
-    for m in re.finditer(
-        r'"aweme_id"\s*:\s*"(\d+)".*?"desc"\s*:\s*"([^"]*)"',
-        html,
-    ):
-        aweme_id, desc = m.group(1), m.group(2)
-        if aweme_id in seen:
+    collected: list[object] = []
+    for item in output:
+        if not isinstance(item, dict) or item.get("type") != "message":
             continue
-        seen.add(aweme_id)
-        title = desc or aweme_id
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for content_item in content:
+            if not isinstance(content_item, dict):
+                continue
+            annotations = content_item.get("annotations")
+            if isinstance(annotations, list):
+                collected.extend(annotations)
+
+    if not collected:
+        return []
+    return _build_search_results(collected)
+
+
+def _extract_output_summary(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+
+    output = payload.get("output")
+    if not isinstance(output, list):
+        return None
+
+    snippets: list[str] = []
+    for item in output:
+        if not isinstance(item, dict) or item.get("type") != "message":
+            continue
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for content_item in content:
+            if not isinstance(content_item, dict):
+                continue
+            text = content_item.get("text")
+            if isinstance(text, str) and text.strip():
+                snippets.append(text.strip())
+
+    if not snippets:
+        return None
+
+    return _shorten_text("\n\n".join(snippets), limit=480)
+
+
+def _parse_action_detail_results(payload: object) -> list[SearchResult]:
+    if not isinstance(payload, dict):
+        return []
+
+    detail_collections: list[object] = []
+    if isinstance(payload.get("action_details"), list):
+        detail_collections.append(payload["action_details"])
+
+    for usage_key in ("bot_usage", "usage"):
+        usage = payload.get(usage_key)
+        if isinstance(usage, dict) and isinstance(usage.get("action_details"), list):
+            detail_collections.append(usage["action_details"])
+
+    for details in detail_collections:
+        if not isinstance(details, list):
+            continue
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            tool_details = detail.get("tool_details")
+            if not isinstance(tool_details, list):
+                continue
+            for tool_detail in tool_details:
+                if not isinstance(tool_detail, dict):
+                    continue
+                items = _extract_results_from_output(tool_detail.get("output"))
+                if items:
+                    return _build_search_results(items)
+
+    return []
+
+
+def _extract_results_from_output(output: object) -> list[object]:
+    candidates = [output]
+    while candidates:
+        current = candidates.pop(0)
+        if isinstance(current, dict):
+            results = current.get("results")
+            if isinstance(results, list):
+                return results
+            candidates.extend(current.values())
+        elif isinstance(current, list):
+            candidates.extend(current)
+    return []
+
+
+def _build_search_results(items: list[object]) -> list[SearchResult]:
+    results: list[SearchResult] = []
+    seen_urls: set[str] = set()
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        raw_url = item.get("url")
+        if not isinstance(raw_url, str) or not raw_url:
+            continue
+        if raw_url in seen_urls:
+            continue
+        seen_urls.add(raw_url)
+
+        raw_title = item.get("title") or item.get("site_name")
+        title = raw_title if isinstance(raw_title, str) and raw_title else raw_url
+
+        snippet = ""
+        for key in ("summary", "snippet", "content", "text"):
+            value = item.get(key)
+            if isinstance(value, str) and value:
+                snippet = _shorten_text(value)
+                break
+
         results.append(
             SearchResult(
                 title=title,
-                url=f"https://www.douyin.com/video/{aweme_id}",
-                snippet=desc or title,
+                url=raw_url,
+                snippet=snippet,
                 source="douyin",
+                timestamp=_normalize_timestamp(
+                    item.get("publish_time") or item.get("published_at")
+                ),
             )
         )
 
     return results
+
+
+def _shorten_text(text: str, *, limit: int = 360) -> str:
+    compact = re.sub(r"\s+", " ", text).strip()
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3].rstrip() + "..."
+
+
+def _normalize_timestamp(value: object) -> str | None:
+    if value in (None, "", 0):
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, tz=timezone.utc).isoformat().replace(
+            "+00:00", "Z"
+        )
+    return str(value)

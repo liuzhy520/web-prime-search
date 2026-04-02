@@ -1,150 +1,265 @@
 from __future__ import annotations
 
-from urllib.parse import quote
+import json
+from datetime import datetime, timezone
 
 import pytest
 import respx
 from httpx import Response
 
 from web_prime_search.config import Settings
-from web_prime_search.engines.douyin import _extract_from_data, search
+from web_prime_search.engines.douyin import search
 
 pytestmark = pytest.mark.asyncio
 
+_RESPONSES_URL = "https://ark.cn-beijing.volces.com/api/v3/responses"
+_MODEL = "doubao-seed-1-6-250615"
 _SETTINGS = Settings(
-    douyin_cookie="test_session=abc123",
+    volcengine_api_key="ark_test_key",
+    volcengine_responses_url=_RESPONSES_URL,
+    volcengine_web_search_model=_MODEL,
     proxy_url="http://127.0.0.1:7897",
 )
 
-_SEARCH_BASE = "https://www.douyin.com/search/"
-
-# Minimal HTML with a RENDER_DATA script containing two video entries
-_RENDER_DATA_JSON = quote(
-    '{"app":{"videoData":[{"aweme_id":"111222333","desc":"Funny cat video"},'
-    '{"aweme_id":"444555666","desc":"Travel vlog Beijing"}]}}'
-)
-
-_HTML_WITH_RENDER_DATA = (
-    "<html><body>"
-    f'<script id="RENDER_DATA" type="application/json">{_RENDER_DATA_JSON}</script>'
-    "</body></html>"
-)
-
-_HTML_NO_RENDER_DATA = "<html><body><div>No data here</div></body></html>"
-
-_HTML_WITH_REGEX_FALLBACK = (
-    '<html><body><script>'
-    '{"aweme_id":"777888999","desc":"Regex fallback video"}'
-    "</script></body></html>"
-)
-
 
 @respx.mock
-async def test_search_returns_results():
-    respx.get(url__startswith=_SEARCH_BASE).mock(
-        return_value=Response(200, text=_HTML_WITH_RENDER_DATA)
+async def test_search_returns_reference_results():
+    route = respx.post(_RESPONSES_URL).mock(
+        return_value=Response(
+            200,
+            json={
+                "references": [
+                    {
+                        "title": "OPC 行业观察",
+                        "url": "https://example.com/opc-overview",
+                        "summary": "来自火山联网搜索的摘要",
+                        "publish_time": "2026-04-02 10:00:00",
+                    },
+                    {
+                        "title": "OPC 热点追踪",
+                        "url": "https://example.com/opc-news",
+                        "summary": "第二条结果",
+                    },
+                ]
+            },
+        )
     )
 
-    results = await search("test query", settings=_SETTINGS)
+    results = await search("opc", settings=_SETTINGS)
 
+    assert route.called
+    request = route.calls.last.request
+    assert request.headers["Authorization"] == "Bearer ark_test_key"
+    payload = json.loads(request.content.decode())
+    assert payload == {
+        "model": _MODEL,
+        "stream": False,
+        "tools": [{"type": "web_search"}],
+        "input": "opc",
+    }
     assert len(results) == 2
     assert results[0].source == "douyin"
-    assert results[0].title == "Funny cat video"
-    assert results[0].url == "https://www.douyin.com/video/111222333"
-    assert results[0].snippet == "Funny cat video"
-    assert results[1].title == "Travel vlog Beijing"
-    assert results[1].url == "https://www.douyin.com/video/444555666"
+    assert results[0].title == "OPC 行业观察"
+    assert results[0].url == "https://example.com/opc-overview"
+    assert results[0].snippet == "来自火山联网搜索的摘要"
+    assert results[0].timestamp == "2026-04-02 10:00:00"
+    assert results[0].summary is None
 
 
 @respx.mock
-async def test_search_empty_results():
-    empty_data = quote('{"app":{}}')
-    html = (
-        "<html><body>"
-        f'<script id="RENDER_DATA" type="application/json">{empty_data}</script>'
-        "</body></html>"
-    )
-    respx.get(url__startswith=_SEARCH_BASE).mock(
-        return_value=Response(200, text=html)
+async def test_search_falls_back_to_action_detail_results():
+    timestamp = 1712217600
+    route = respx.post(_RESPONSES_URL).mock(
+        return_value=Response(
+            200,
+            json={
+                "bot_usage": {
+                    "action_details": [
+                        {
+                            "name": "content_plugin",
+                            "tool_details": [
+                                {
+                                    "name": "search",
+                                    "output": {
+                                        "data": {
+                                            "data": {
+                                                "results": [
+                                                    {
+                                                        "title": "OPC 百科",
+                                                        "url": "https://example.com/opc-baike",
+                                                        "summary": "来自 action_details 的结果",
+                                                        "publish_time": timestamp,
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    },
+                                }
+                            ],
+                        }
+                    ]
+                }
+            },
+        )
     )
 
-    results = await search("nothing", settings=_SETTINGS)
+    results = await search("opc", settings=_SETTINGS)
 
-    assert results == []
+    assert route.called
+    assert len(results) == 1
+    assert results[0].title == "OPC 百科"
+    assert results[0].timestamp == datetime.fromtimestamp(
+        timestamp, tz=timezone.utc
+    ).isoformat().replace("+00:00", "Z")
 
 
 @respx.mock
-async def test_search_http_error():
-    respx.get(url__startswith=_SEARCH_BASE).mock(
-        return_value=Response(403, text="Forbidden")
+async def test_search_parses_output_annotations():
+    respx.post(_RESPONSES_URL).mock(
+        return_value=Response(
+            200,
+            json={
+                "output": [
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": "以下是热点新闻汇总",
+                                "annotations": [
+                                    {
+                                        "type": "url_citation",
+                                        "title": "4月2日新闻早知道",
+                                        "url": "https://example.com/news-1",
+                                        "summary": "第一条热点摘要",
+                                        "publish_time": "2026年04月02日 07:59:00(CST) 星期四",
+                                    },
+                                    {
+                                        "type": "url_citation",
+                                        "title": "早啊!新闻来了〔2026.04.02〕",
+                                        "url": "https://example.com/news-2",
+                                        "summary": "第二条热点摘要",
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
     )
 
-    with pytest.raises(ValueError, match="Douyin search error: HTTP 403"):
-        await search("query", settings=_SETTINGS)
+    results = await search("今天有什么热点新闻？", settings=_SETTINGS)
+
+    assert len(results) == 2
+    assert results[0].title == "4月2日新闻早知道"
+    assert results[0].url == "https://example.com/news-1"
+    assert results[0].snippet == "第一条热点摘要"
+    assert results[0].timestamp == "2026年04月02日 07:59:00(CST) 星期四"
 
 
 @respx.mock
-async def test_search_no_render_data_returns_empty():
-    respx.get(url__startswith=_SEARCH_BASE).mock(
-        return_value=Response(200, text=_HTML_NO_RENDER_DATA)
+async def test_search_attaches_output_summary_and_shortens_long_snippets():
+    respx.post(_RESPONSES_URL).mock(
+        return_value=Response(
+            200,
+            json={
+                "output": [
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": "以下是今天的热点：\n1. 国内政策\n2. 国际局势\n3. 民生资讯",
+                                "annotations": [
+                                    {
+                                        "type": "url_citation",
+                                        "title": "热点 1",
+                                        "url": "https://example.com/hot-1",
+                                        "summary": "A" * 500,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
     )
 
-    results = await search("query", settings=_SETTINGS)
-
-    assert results == []
-
-
-@respx.mock
-async def test_search_regex_fallback():
-    respx.get(url__startswith=_SEARCH_BASE).mock(
-        return_value=Response(200, text=_HTML_WITH_REGEX_FALLBACK)
-    )
-
-    results = await search("query", settings=_SETTINGS)
+    results = await search("今天有什么热点新闻？", settings=_SETTINGS)
 
     assert len(results) == 1
-    assert results[0].title == "Regex fallback video"
-    assert results[0].url == "https://www.douyin.com/video/777888999"
-    assert results[0].source == "douyin"
+    assert results[0].summary == "以下是今天的热点： 1. 国内政策 2. 国际局势 3. 民生资讯"
+    assert len(results[0].snippet) == 360
+    assert results[0].snippet.endswith("...")
+
+
+@respx.mock
+async def test_search_empty_results_when_no_reference_data():
+    respx.post(_RESPONSES_URL).mock(return_value=Response(200, json={}))
+
+    results = await search("opc", settings=_SETTINGS)
+
+    assert results == []
+
+
+@respx.mock
+async def test_search_http_error_surfaces_message():
+    respx.post(_RESPONSES_URL).mock(
+        return_value=Response(401, json={"error": {"message": "Unauthorized"}})
+    )
+
+    with pytest.raises(
+        ValueError, match=r"Douyin search error: HTTP 401: Unauthorized"
+    ):
+        await search("opc", settings=_SETTINGS)
+
+
+async def test_search_requires_api_key():
+    with pytest.raises(ValueError, match="Volcengine API key is not configured"):
+        await search(
+            "opc",
+            settings=Settings(
+                volcengine_api_key="",
+                volcengine_web_search_model=_MODEL,
+            ),
+        )
+
+
+async def test_search_requires_model():
+    with pytest.raises(
+        ValueError, match="Volcengine web search model is not configured"
+    ):
+        await search(
+            "opc",
+            settings=Settings(
+                volcengine_api_key="ark_test_key",
+                volcengine_web_search_model="",
+            ),
+        )
 
 
 @respx.mock
 async def test_search_respects_max_results():
-    respx.get(url__startswith=_SEARCH_BASE).mock(
-        return_value=Response(200, text=_HTML_WITH_RENDER_DATA)
+    respx.post(_RESPONSES_URL).mock(
+        return_value=Response(
+            200,
+            json={
+                "references": [
+                    {
+                        "title": f"Result {index}",
+                        "url": f"https://example.com/{index}",
+                        "summary": f"Snippet {index}",
+                    }
+                    for index in range(3)
+                ]
+            },
+        )
     )
 
-    results = await search("query", max_results=1, settings=_SETTINGS)
-
-    assert len(results) == 1
-
-
-@respx.mock
-async def test_search_without_cookie():
-    settings_no_cookie = Settings(douyin_cookie="", proxy_url="http://127.0.0.1:7897")
-    respx.get(url__startswith=_SEARCH_BASE).mock(
-        return_value=Response(200, text=_HTML_WITH_RENDER_DATA)
-    )
-
-    results = await search("query", settings=settings_no_cookie)
+    results = await search("opc", max_results=2, settings=_SETTINGS)
 
     assert len(results) == 2
-
-
-async def test_extract_from_data_handles_cyclic_structures():
-    cyclic: dict[str, object] = {}
-    cyclic["self"] = cyclic
-
-    results = _extract_from_data(cyclic)
-
-    assert results == []
-
-
-async def test_extract_from_data_stops_at_depth_limit():
-    deep: object = {"aweme_id": "999", "desc": "Too deep"}
-    for _ in range(30):
-        deep = {"child": deep}
-
-    results = _extract_from_data(deep, max_depth=10)
-
-    assert results == []

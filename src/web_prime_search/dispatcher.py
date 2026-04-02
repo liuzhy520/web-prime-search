@@ -5,7 +5,7 @@ import logging
 from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
 
 from web_prime_search.config import Settings, get_settings
-from web_prime_search.engines import baidu, douyin, google, x
+from web_prime_search.engines import baidu, douyin, duckduckgo, google, x
 from web_prime_search.models import SearchResult
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,7 @@ ENGINE_REGISTRY: Dict[str, Callable[..., Awaitable[List[SearchResult]]]] = {
     "x": x.search,
     "google": google.search,
     "douyin": douyin.search,
+    "duckduckgo": duckduckgo.search,
     "baidu": baidu.search,
 }
 
@@ -113,7 +114,8 @@ async def search_engine(
         )
         return []
     except Exception as exc:
-        logger.warning("Engine %s failed: %s", engine_name, exc)
+        error_message = str(exc).strip() or exc.__class__.__name__
+        logger.warning("Engine %s failed: %s", engine_name, error_message)
         return []
 
 

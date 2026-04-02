@@ -51,9 +51,11 @@ async def test_web_search_calls_dispatcher(mock_multi: AsyncMock):
         "snippet": "snippet 1",
         "source": "google",
         "timestamp": "2024-01-01",
+        "summary": None,
     }
     assert result[1]["source"] == "baidu"
     assert result[1]["timestamp"] is None
+    assert result[1]["summary"] is None
 
 
 @patch("web_prime_search.mcp_tool.multi_search")

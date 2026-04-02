@@ -54,7 +54,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-async def _run_search_command(args: argparse.Namespace) -> list[dict[str, str | None]]:
+async def _run_search_command(args: argparse.Namespace) -> list[dict[str, object]]:
     results = await multi_search(
         query=args.query,
         engines=_parse_engine_list(args.engines),

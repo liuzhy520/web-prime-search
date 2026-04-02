@@ -11,3 +11,4 @@ class SearchResult:
     snippet: str
     source: str
     timestamp: Optional[str] = None
+    summary: Optional[str] = None
