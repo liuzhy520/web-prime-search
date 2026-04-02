@@ -1,0 +1,14 @@
+{
+    "id": "TASK-006",
+    "title": "Baidu search adapter (web scraping or API)",
+    "status": "todo",
+    "owner": "executor",
+    "branch": "feat/TASK-006-baidu-adapter",
+    "worktree": "../wt-TASK-006",
+    "allowed_paths": ["src/web_prime_search/engines/baidu.py", "tests/test_engine_baidu.py"],
+    "forbidden_paths": [".ai-control/", ".github/", ".copilot/"],
+    "shared_contracts": ["SearchResult model from models.py", "async def search(query, max_results=10) -> list[SearchResult]", "Uses get_http_client('baidu') from proxy module (direct, no proxy)"],
+    "depends_on": ["TASK-001", "TASK-002"],
+    "acceptance": ["Performs Baidu search", "Returns list[SearchResult] with source='baidu'", "Handles errors gracefully", "Unit tests pass with mocked responses"],
+    "verification": ["pytest tests/test_engine_baidu.py -v"]
+}

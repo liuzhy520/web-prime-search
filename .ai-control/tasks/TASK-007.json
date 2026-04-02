@@ -1,0 +1,14 @@
+{
+    "id": "TASK-007",
+    "title": "Search dispatcher: priority-ordered multi-engine search with fallback",
+    "status": "todo",
+    "owner": "executor",
+    "branch": "feat/TASK-007-dispatcher",
+    "worktree": "../wt-TASK-007",
+    "allowed_paths": ["src/web_prime_search/dispatcher.py", "tests/test_dispatcher.py"],
+    "forbidden_paths": [".ai-control/", ".github/", ".copilot/"],
+    "shared_contracts": ["async def multi_search(query, engines=None, max_results=10) -> list[SearchResult]"],
+    "depends_on": ["TASK-003", "TASK-004", "TASK-005", "TASK-006"],
+    "acceptance": ["Dispatches to engines in priority order (X > Google > Douyin > Baidu)", "On engine failure, logs warning and falls back to next", "Returns aggregated results from all successful engines", "Supports filtering to specific engines", "Unit tests with mocked adapters pass"],
+    "verification": ["pytest tests/test_dispatcher.py -v"]
+}

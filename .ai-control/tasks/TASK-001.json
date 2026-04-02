@@ -1,0 +1,14 @@
+{
+    "id": "TASK-001",
+    "title": "Project scaffolding: directory structure, pyproject.toml, config module",
+    "status": "todo",
+    "owner": "executor",
+    "branch": "feat/TASK-001-scaffolding",
+    "worktree": "../wt-TASK-001",
+    "allowed_paths": ["pyproject.toml", "src/", "src/web_prime_search/", "src/web_prime_search/__init__.py", "src/web_prime_search/config.py", "src/web_prime_search/py.typed", ".env.example", "tests/", "tests/__init__.py", "tests/conftest.py"],
+    "forbidden_paths": [".ai-control/", ".github/", ".copilot/"],
+    "shared_contracts": ["Settings dataclass with: x_bearer_token, google_api_key, google_cx, proxy_url (default http://127.0.0.1:7897), search_priority (default [x, google, douyin, baidu])"],
+    "depends_on": [],
+    "acceptance": ["pip install -e . succeeds", "from web_prime_search.config import Settings works", "Settings loads from env vars with sensible defaults", "src/ layout convention used"],
+    "verification": ["pip install -e . && python -c \"from web_prime_search.config import Settings; print(Settings())\""]
+}

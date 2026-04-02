@@ -1,0 +1,14 @@
+{
+    "id": "TASK-003",
+    "title": "X/Twitter search adapter using API v2 recent search",
+    "status": "todo",
+    "owner": "executor",
+    "branch": "feat/TASK-003-x-adapter",
+    "worktree": "../wt-TASK-003",
+    "allowed_paths": ["src/web_prime_search/engines/", "src/web_prime_search/engines/__init__.py", "src/web_prime_search/engines/x.py", "src/web_prime_search/models.py", "tests/test_engine_x.py"],
+    "forbidden_paths": [".ai-control/", ".github/", ".copilot/"],
+    "shared_contracts": ["SearchResult model in models.py: title, url, snippet, source, timestamp", "async def search(query, max_results=10) -> list[SearchResult]", "Uses get_http_client('x') from proxy module"],
+    "depends_on": ["TASK-001", "TASK-002"],
+    "acceptance": ["Calls Twitter API v2 /2/tweets/search/recent with bearer token", "Returns list[SearchResult] with source='x'", "Raises descriptive error on auth failure or rate limit", "Unit tests pass with mocked HTTP responses"],
+    "verification": ["pytest tests/test_engine_x.py -v"]
+}

@@ -1,0 +1,14 @@
+{
+    "id": "TASK-002",
+    "title": "Proxy routing: httpx client factory with per-engine proxy/direct routing",
+    "status": "todo",
+    "owner": "executor",
+    "branch": "feat/TASK-002-proxy-routing",
+    "worktree": "../wt-TASK-002",
+    "allowed_paths": ["src/web_prime_search/proxy.py", "tests/test_proxy.py"],
+    "forbidden_paths": [".ai-control/", ".github/", ".copilot/"],
+    "shared_contracts": ["get_http_client(engine: str) -> httpx.AsyncClient — proxy for x/google, direct for douyin/baidu"],
+    "depends_on": ["TASK-001"],
+    "acceptance": ["get_http_client('x') returns client with proxy=http://127.0.0.1:7897", "get_http_client('baidu') returns client with no proxy", "Unit tests pass with mocked config"],
+    "verification": ["pytest tests/test_proxy.py -v"]
+}

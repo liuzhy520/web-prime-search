@@ -1,0 +1,14 @@
+{
+    "id": "TASK-005",
+    "title": "Douyin search adapter (web scraping or API)",
+    "status": "todo",
+    "owner": "executor",
+    "branch": "feat/TASK-005-douyin-adapter",
+    "worktree": "../wt-TASK-005",
+    "allowed_paths": ["src/web_prime_search/engines/douyin.py", "tests/test_engine_douyin.py"],
+    "forbidden_paths": [".ai-control/", ".github/", ".copilot/"],
+    "shared_contracts": ["SearchResult model from models.py", "async def search(query, max_results=10) -> list[SearchResult]", "Uses get_http_client('douyin') from proxy module (direct, no proxy)"],
+    "depends_on": ["TASK-001", "TASK-002"],
+    "acceptance": ["Performs Douyin search via web endpoint or available API", "Returns list[SearchResult] with source='douyin'", "Handles anti-scraping/rate-limit gracefully", "Unit tests pass with mocked responses"],
+    "verification": ["pytest tests/test_engine_douyin.py -v"]
+}

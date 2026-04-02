@@ -1,0 +1,14 @@
+{
+    "id": "TASK-004",
+    "title": "Google Custom Search adapter using JSON API",
+    "status": "todo",
+    "owner": "executor",
+    "branch": "feat/TASK-004-google-adapter",
+    "worktree": "../wt-TASK-004",
+    "allowed_paths": ["src/web_prime_search/engines/google.py", "tests/test_engine_google.py"],
+    "forbidden_paths": [".ai-control/", ".github/", ".copilot/"],
+    "shared_contracts": ["SearchResult model from models.py", "async def search(query, max_results=10) -> list[SearchResult]", "Uses get_http_client('google') from proxy module"],
+    "depends_on": ["TASK-001", "TASK-002"],
+    "acceptance": ["Calls https://www.googleapis.com/customsearch/v1 with API key + CX", "Returns list[SearchResult] with source='google'", "Handles error responses gracefully", "Unit tests pass"],
+    "verification": ["pytest tests/test_engine_google.py -v"]
+}

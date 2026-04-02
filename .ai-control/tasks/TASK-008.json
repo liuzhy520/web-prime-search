@@ -1,0 +1,14 @@
+{
+    "id": "TASK-008",
+    "title": "OpenClaw MCP tool definition and skill entry point",
+    "status": "todo",
+    "owner": "executor",
+    "branch": "feat/TASK-008-mcp-skill",
+    "worktree": "../wt-TASK-008",
+    "allowed_paths": ["src/web_prime_search/mcp_tool.py", "src/web_prime_search/__main__.py", "tests/test_mcp_tool.py", "pyproject.toml"],
+    "forbidden_paths": [".ai-control/", ".github/", ".copilot/"],
+    "shared_contracts": ["MCP tool web_prime_search with input {query: str, engines?: list[str], max_results?: int}"],
+    "depends_on": ["TASK-007"],
+    "acceptance": ["MCP tool definition is valid and discoverable", "Tool invocation calls dispatcher and returns structured JSON results", "python -m web_prime_search starts MCP stdio server", "Unit tests pass"],
+    "verification": ["pytest tests/test_mcp_tool.py -v", "python -m web_prime_search --help"]
+}
