@@ -8,7 +8,7 @@ from web_prime_search.dispatcher import multi_search
 
 mcp = FastMCP(
     "web-prime-search",
-    instructions="Multi-engine search tool with priority routing across Google, Douyin, DuckDuckGo, Baidu, and X",
+    instructions="Multi-engine search tool with priority routing across Google HTML, DuckDuckGo, Douyin, Baidu, Google API, and X",
 )
 
 
@@ -20,14 +20,14 @@ async def web_search(
 ) -> list[dict]:
     """Search across multiple engines with priority-based routing.
 
-    Searches are routed through a local Clash proxy for engines that need it (X, Google, DuckDuckGo)
+    Searches are routed through a local Clash proxy for engines that need it (X, Google HTML, Google API, DuckDuckGo)
     and directly for domestic engines (Douyin via Volcengine web search, Baidu).
 
     Args:
         query: The search query string
         engines: Optional list of engines to use for this request.
-            Supported values: google, douyin, duckduckgo, baidu, x.
-            Example: ["duckduckgo", "baidu"]. Invalid names are ignored.
+            Supported values: google_html, duckduckgo, douyin, baidu, google, x.
+            Example: ["google_html", "baidu"]. Invalid names are ignored.
             If no valid engine remains, falls back to the configured default priority.
         max_results: Maximum results per engine (default 10)
 

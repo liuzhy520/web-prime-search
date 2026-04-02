@@ -1,15 +1,18 @@
 # web-prime-search
-给龙虾开发的基于本地网络代理，使用自动路由 google、douyin、duckduckgo、baidu、x 的网络搜索工具
+给龙虾开发的基于本地网络代理，使用自动路由 google_html、duckduckgo、douyin、baidu、google、x 的网络搜索工具
 
 ---
 
 ## 搜索能力
 
-支持的搜索引擎：`google`、`douyin`、`duckduckgo`、`baidu`、`x`。
+支持的搜索引擎：`google_html`、`duckduckgo`、`douyin`、`baidu`、`google`、`x`。
 
-- 默认情况下，搜索会按配置中的优先级依次聚合结果；当前默认顺序为 `duckduckgo`、`douyin`、`baidu`、`google`、`x`。
+- 默认情况下，搜索会按配置中的优先级依次聚合结果；当前默认顺序为 `google_html`、`duckduckgo`、`douyin`、`baidu`、`google`、`x`。
 - 单次请求可以显式指定一个或多个搜索引擎，覆盖默认优先级。
 - 如果传入的引擎名全部无效，会自动回退到默认优先级继续搜索。
+- `google_html` 引擎优先尝试直接抓取 Google 搜索结果页 HTML；若静态页面被 Google 的 JS/反爬机制拦住，会继续尝试 Playwright 浏览器 fallback，不需要单独的 API Key，默认优先级最高。
+- `google_html` 属于 best-effort 引擎；如果静态 HTML 和浏览器 fallback 都遇到反爬、同意页或 `enablejs` 页面，会记录失败并自动降级到后续引擎。
+- `google` 引擎保留为 Google Custom Search API 版本，仍需要配置 `WPS_GOOGLE_API_KEY` 与 `WPS_GOOGLE_CX`。
 - `douyin` 引擎现通过火山方舟 Ark Responses API 的联网搜索工具实现，不再直接抓取抖音网页。
 - `duckduckgo` 引擎通过 `ddgs` 包接入 DuckDuckGo 文本搜索，不需要单独的 API Key。
 - `douyin` 结果会优先返回较短的引用摘要；如果模型本身生成了热点概述，会额外放在 `summary` 字段里，便于直接展示。
@@ -17,6 +20,8 @@
 ### 配置说明
 
 - 应用会优先自动加载仓库根目录下的 `.env`；如果 `.env` 不存在，会回退读取 `.env.example`。
+- `google_html` 引擎默认复用 `WPS_PROXY_URL` 和 `WPS_ENGINE_TIMEOUT_SECONDS`，无需额外环境变量。
+- `WPS_GOOGLE_API_KEY` 与 `WPS_GOOGLE_CX`：仅 `google` API 引擎需要，`google_html` 不依赖这两个配置。
 - `WPS_VOLCENGINE_API_KEY`：火山方舟 API Key，`douyin` 引擎必填。
 - `WPS_VOLCENGINE_WEB_SEARCH_MODEL`：用于联网搜索的火山模型 ID，`douyin` 引擎必填。
 - `WPS_VOLCENGINE_RESPONSES_URL`：可选，默认值为 `https://ark.cn-beijing.volces.com/api/v3/responses`。
@@ -29,6 +34,8 @@ MCP 工具名为 `web_search`，支持传入 `engines` 参数：
 
 ```python
 await web_search(query="opc", engines=["x", "baidu"], max_results=5)
+
+await web_search(query="最近一周的热点新闻", engines=["google_html"], max_results=5)
 
 await web_search(query="今天有什么热点新闻？", engines=["duckduckgo"], max_results=5)
 ```
@@ -46,6 +53,7 @@ web-prime-search serve
 
 ```bash
 web-prime-search search --query "opc" --engines x,baidu --max-results 5
+web-prime-search search --query "最近一周的热点新闻" --engines google_html --max-results 5
 web-prime-search search --query "今天有什么热点新闻？" --engines duckduckgo --max-results 5
 ```
 

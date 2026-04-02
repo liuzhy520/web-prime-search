@@ -5,7 +5,7 @@ import logging
 from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
 
 from web_prime_search.config import Settings, get_settings
-from web_prime_search.engines import baidu, douyin, duckduckgo, google, x
+from web_prime_search.engines import baidu, douyin, duckduckgo, google, google_html, x
 from web_prime_search.models import SearchResult
 
 logger = logging.getLogger(__name__)
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 ENGINE_REGISTRY: Dict[str, Callable[..., Awaitable[List[SearchResult]]]] = {
     "x": x.search,
     "google": google.search,
+    "google_html": google_html.search,
     "douyin": douyin.search,
     "duckduckgo": duckduckgo.search,
     "baidu": baidu.search,

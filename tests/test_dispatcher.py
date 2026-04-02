@@ -12,7 +12,7 @@ from web_prime_search.models import SearchResult
 pytestmark = pytest.mark.asyncio
 
 _SETTINGS = Settings(
-    search_priority=["duckduckgo", "douyin", "baidu", "google", "x"],
+    search_priority=["google_html", "duckduckgo", "douyin", "baidu", "google", "x"],
 )
 
 
@@ -34,6 +34,7 @@ async def test_all_engines_succeed(mock_registry: dict):
     mock_registry.get = lambda name: {
         "x": AsyncMock(return_value=_make_results("x")),
         "google": AsyncMock(return_value=_make_results("google")),
+        "google_html": AsyncMock(return_value=_make_results("google_html")),
         "douyin": AsyncMock(return_value=_make_results("douyin")),
         "duckduckgo": AsyncMock(return_value=_make_results("duckduckgo")),
         "baidu": AsyncMock(return_value=_make_results("baidu")),
@@ -41,16 +42,17 @@ async def test_all_engines_succeed(mock_registry: dict):
 
     results = await multi_search("test query", settings=_SETTINGS)
 
-    assert len(results) == 10
-    # Priority order: duckduckgo first, then douyin, baidu, google, x
-    assert results[0].source == "duckduckgo"
-    assert results[1].source == "duckduckgo"
-    assert results[2].source == "douyin"
-    assert results[3].source == "douyin"
-    assert results[4].source == "baidu"
-    assert results[5].source == "baidu"
-    assert results[6].source == "google"
-    assert results[8].source == "x"
+    assert len(results) == 12
+    # Priority order: google_html first, then duckduckgo, douyin, baidu, google, x
+    assert results[0].source == "google_html"
+    assert results[1].source == "google_html"
+    assert results[2].source == "duckduckgo"
+    assert results[3].source == "duckduckgo"
+    assert results[4].source == "douyin"
+    assert results[5].source == "douyin"
+    assert results[6].source == "baidu"
+    assert results[8].source == "google"
+    assert results[10].source == "x"
 
 
 @patch("web_prime_search.dispatcher.ENGINE_REGISTRY")
@@ -59,6 +61,7 @@ async def test_one_engine_fails_fallback(mock_registry: dict, caplog):
     mock_registry.get = lambda name: {
         "x": AsyncMock(return_value=_make_results("x")),
         "google": AsyncMock(side_effect=ValueError("API quota exceeded")),
+        "google_html": AsyncMock(return_value=_make_results("google_html")),
         "douyin": AsyncMock(return_value=_make_results("douyin")),
         "duckduckgo": AsyncMock(return_value=_make_results("duckduckgo")),
         "baidu": AsyncMock(return_value=_make_results("baidu")),
@@ -67,7 +70,7 @@ async def test_one_engine_fails_fallback(mock_registry: dict, caplog):
     with caplog.at_level(logging.WARNING):
         results = await multi_search("test query", settings=_SETTINGS)
 
-    assert len(results) == 8  # duckduckgo(2) + douyin(2) + baidu(2) + x(2), google failed
+    assert len(results) == 10  # google_html(2) + duckduckgo(2) + douyin(2) + baidu(2) + x(2), google failed
     sources = [r.source for r in results]
     assert "google" not in sources
     assert "Engine google failed" in caplog.text
@@ -78,14 +81,14 @@ async def test_all_engines_fail(mock_registry: dict, caplog):
     """All engines raise -> returns empty list."""
     failing = AsyncMock(side_effect=RuntimeError("down"))
     mock_registry.get = lambda name: failing if name in {
-        "x", "google", "douyin", "duckduckgo", "baidu"
+        "x", "google", "google_html", "douyin", "duckduckgo", "baidu"
     } else None
 
     with caplog.at_level(logging.WARNING):
         results = await multi_search("test query", settings=_SETTINGS)
 
     assert results == []
-    assert caplog.text.count("failed") == 5
+    assert caplog.text.count("failed") == 6
 
 
 @patch("web_prime_search.dispatcher.ENGINE_REGISTRY")
@@ -93,6 +96,7 @@ async def test_custom_engine_list(mock_registry: dict):
     """Custom engine list -> only specified engines called."""
     x_mock = AsyncMock(return_value=_make_results("x"))
     google_mock = AsyncMock(return_value=_make_results("google"))
+    google_html_mock = AsyncMock(return_value=_make_results("google_html"))
     douyin_mock = AsyncMock(return_value=_make_results("douyin"))
     duckduckgo_mock = AsyncMock(return_value=_make_results("duckduckgo"))
     baidu_mock = AsyncMock(return_value=_make_results("baidu"))
@@ -100,6 +104,7 @@ async def test_custom_engine_list(mock_registry: dict):
     mock_registry.get = lambda name: {
         "x": x_mock,
         "google": google_mock,
+        "google_html": google_html_mock,
         "douyin": douyin_mock,
         "duckduckgo": duckduckgo_mock,
         "baidu": baidu_mock,
@@ -113,6 +118,7 @@ async def test_custom_engine_list(mock_registry: dict):
     assert all(r.source in ("google", "baidu") for r in results)
     x_mock.assert_not_awaited()
     douyin_mock.assert_not_awaited()
+    google_html_mock.assert_not_awaited()
     duckduckgo_mock.assert_not_awaited()
 
 
@@ -126,7 +132,7 @@ async def test_unknown_engine_skipped(caplog):
 
 
 async def test_resolve_engine_list_normalizes_and_deduplicates():
-    settings = Settings(search_priority=["duckduckgo", "douyin", "baidu", "google", "x"])
+    settings = Settings(search_priority=["google_html", "duckduckgo", "douyin", "baidu", "google", "x"])
 
     resolved = resolve_engine_list([" Google ", "baidu", "google", "", " X "], settings)
 
@@ -134,12 +140,12 @@ async def test_resolve_engine_list_normalizes_and_deduplicates():
 
 
 async def test_resolve_engine_list_falls_back_to_default_priority(caplog):
-    settings = Settings(search_priority=["duckduckgo", "douyin", "baidu", "google", "x"])
+    settings = Settings(search_priority=["google_html", "duckduckgo", "douyin", "baidu", "google", "x"])
 
     with caplog.at_level(logging.WARNING):
         resolved = resolve_engine_list(["unknown", "   "], settings)
 
-    assert resolved == ["duckduckgo", "douyin", "baidu", "google", "x"]
+    assert resolved == ["google_html", "duckduckgo", "douyin", "baidu", "google", "x"]
     assert "No valid requested engines supplied" in caplog.text
 
 

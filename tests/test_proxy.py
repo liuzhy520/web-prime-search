@@ -29,6 +29,10 @@ class TestGetHttpClient:
         client = get_http_client("google", settings=settings)
         assert _has_proxy_mount(client), "Expected proxy transport for engine 'google'"
 
+    def test_proxy_engine_google_html(self, settings: Settings) -> None:
+        client = get_http_client("google_html", settings=settings)
+        assert _has_proxy_mount(client), "Expected proxy transport for engine 'google_html'"
+
     def test_proxy_engine_duckduckgo(self, settings: Settings) -> None:
         client = get_http_client("duckduckgo", settings=settings)
         assert _has_proxy_mount(client), "Expected proxy transport for engine 'duckduckgo'"
@@ -47,7 +51,7 @@ class TestGetHttpClient:
         assert not _has_proxy_mount(client), "Unknown engine should get direct client"
 
     def test_custom_settings_proxy_engines(self) -> None:
-        custom = Settings(proxy_engines=["baidu"], direct_engines=["x", "google", "douyin", "duckduckgo"])
+        custom = Settings(proxy_engines=["baidu"], direct_engines=["x", "google", "google_html", "douyin", "duckduckgo"])
         client = get_http_client("baidu", settings=custom)
         assert _has_proxy_mount(client), "baidu should use proxy with custom settings"
 
