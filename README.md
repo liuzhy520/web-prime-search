@@ -1,7 +1,40 @@
 # web-prime-search
-给龙虾开发的基于本地网络代理，使用自动路由x、google、抖音、百度的网络搜索工具
+给龙虾开发的基于本地网络代理，使用自动路由 google、douyin、baidu、x 的网络搜索工具
 
 ---
+
+## 搜索能力
+
+支持的搜索引擎：`google`、`douyin`、`baidu`、`x`。
+
+- 默认情况下，搜索会按配置中的优先级依次聚合结果；当前默认顺序为 `google`、`douyin`、`baidu`、`x`。
+- 单次请求可以显式指定一个或多个搜索引擎，覆盖默认优先级。
+- 如果传入的引擎名全部无效，会自动回退到默认优先级继续搜索。
+
+### MCP 工具调用
+
+MCP 工具名为 `web_search`，支持传入 `engines` 参数：
+
+```python
+await web_search(query="opc", engines=["x", "baidu"], max_results=5)
+```
+
+### 命令行调用
+
+默认命令仍然启动 MCP server：
+
+```bash
+web-prime-search
+web-prime-search serve
+```
+
+直接执行一次搜索时，使用 `search` 子命令：
+
+```bash
+web-prime-search search --query "opc" --engines x,baidu --max-results 5
+```
+
+命令行结果会以 JSON 输出，便于脚本消费。
 
 ## Copilot 多 Agent 工作流说明
 

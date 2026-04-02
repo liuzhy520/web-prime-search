@@ -6,13 +6,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from web_prime_search.config import Settings
-from web_prime_search.dispatcher import multi_search, search_engine
+from web_prime_search.dispatcher import multi_search, resolve_engine_list, search_engine
 from web_prime_search.models import SearchResult
 
 pytestmark = pytest.mark.asyncio
 
 _SETTINGS = Settings(
-    search_priority=["x", "google", "douyin", "baidu"],
+    search_priority=["google", "douyin", "baidu", "x"],
 )
 
 
@@ -41,13 +41,13 @@ async def test_all_engines_succeed(mock_registry: dict):
     results = await multi_search("test query", settings=_SETTINGS)
 
     assert len(results) == 8
-    # Priority order: x first, then google, douyin, baidu
-    assert results[0].source == "x"
-    assert results[1].source == "x"
-    assert results[2].source == "google"
-    assert results[3].source == "google"
-    assert results[4].source == "douyin"
-    assert results[6].source == "baidu"
+    # Priority order: google first, then douyin, baidu, x
+    assert results[0].source == "google"
+    assert results[1].source == "google"
+    assert results[2].source == "douyin"
+    assert results[3].source == "douyin"
+    assert results[4].source == "baidu"
+    assert results[6].source == "x"
 
 
 @patch("web_prime_search.dispatcher.ENGINE_REGISTRY")
@@ -118,6 +118,24 @@ async def test_unknown_engine_skipped(caplog):
     assert "Unknown engine: nonexistent" in caplog.text
 
 
+async def test_resolve_engine_list_normalizes_and_deduplicates():
+    settings = Settings(search_priority=["google", "douyin", "baidu", "x"])
+
+    resolved = resolve_engine_list([" Google ", "baidu", "google", "", " X "], settings)
+
+    assert resolved == ["google", "baidu", "x"]
+
+
+async def test_resolve_engine_list_falls_back_to_default_priority(caplog):
+    settings = Settings(search_priority=["google", "douyin", "baidu", "x"])
+
+    with caplog.at_level(logging.WARNING):
+        resolved = resolve_engine_list(["unknown", "   "], settings)
+
+    assert resolved == ["google", "douyin", "baidu", "x"]
+    assert "No valid requested engines supplied" in caplog.text
+
+
 @patch("web_prime_search.dispatcher.ENGINE_REGISTRY")
 async def test_engines_run_concurrently(mock_registry: dict):
     """Engines dispatched via asyncio.gather (concurrent execution)."""
@@ -150,3 +168,24 @@ async def test_engines_run_concurrently(mock_registry: dict):
     # Both should start before either ends (concurrent)
     assert call_order.index("x_start") < call_order.index("google_end")
     assert call_order.index("google_start") < call_order.index("x_end")
+
+
+@patch("web_prime_search.dispatcher.ENGINE_REGISTRY")
+async def test_engine_timeout_returns_empty(mock_registry: dict, caplog):
+    import asyncio
+
+    async def slow_engine(*a, **kw):
+        await asyncio.sleep(0.05)
+        return _make_results("x", 1)
+
+    settings = Settings(
+        search_priority=["x"],
+        engine_timeout_seconds=0.01,
+    )
+    mock_registry.get = lambda name: slow_engine if name == "x" else None
+
+    with caplog.at_level(logging.WARNING):
+        results = await search_engine("x", "test", 1, settings)
+
+    assert results == []
+    assert "Engine x timed out" in caplog.text

@@ -7,7 +7,7 @@ import respx
 from httpx import Response
 
 from web_prime_search.config import Settings
-from web_prime_search.engines.douyin import search
+from web_prime_search.engines.douyin import _extract_from_data, search
 
 pytestmark = pytest.mark.asyncio
 
@@ -129,3 +129,22 @@ async def test_search_without_cookie():
     results = await search("query", settings=settings_no_cookie)
 
     assert len(results) == 2
+
+
+async def test_extract_from_data_handles_cyclic_structures():
+    cyclic: dict[str, object] = {}
+    cyclic["self"] = cyclic
+
+    results = _extract_from_data(cyclic)
+
+    assert results == []
+
+
+async def test_extract_from_data_stops_at_depth_limit():
+    deep: object = {"aweme_id": "999", "desc": "Too deep"}
+    for _ in range(30):
+        deep = {"child": deep}
+
+    results = _extract_from_data(deep, max_depth=10)
+
+    assert results == []

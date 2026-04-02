@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     google_cx: str = ""
     douyin_cookie: str = ""
     proxy_url: str = "http://127.0.0.1:7897"
-    search_priority: List[str] = ["x", "google", "douyin", "baidu"]
+    engine_timeout_seconds: float = 35.0
+    search_priority: List[str] = ["google", "douyin", "baidu", "x"]
     proxy_engines: List[str] = ["x", "google"]
     direct_engines: List[str] = ["douyin", "baidu"]
 

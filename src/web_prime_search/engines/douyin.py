@@ -63,10 +63,27 @@ def _parse_render_data(html: str) -> list[SearchResult]:
     return _extract_from_data(data)
 
 
-def _extract_from_data(data: object) -> list[SearchResult]:
+def _extract_from_data(
+    data: object,
+    *,
+    max_depth: int = 25,
+    _depth: int = 0,
+    _seen_ids: set[int] | None = None,
+) -> list[SearchResult]:
     results: list[SearchResult] = []
 
+    if _depth >= max_depth:
+        return results
+
+    if _seen_ids is None:
+        _seen_ids = set()
+
     if isinstance(data, dict):
+        data_id = id(data)
+        if data_id in _seen_ids:
+            return results
+        _seen_ids.add(data_id)
+
         # Look for aweme_id which indicates a video entry
         if "aweme_id" in data:
             aweme_id = data["aweme_id"]
@@ -82,10 +99,29 @@ def _extract_from_data(data: object) -> list[SearchResult]:
             )
         else:
             for value in data.values():
-                results.extend(_extract_from_data(value))
+                results.extend(
+                    _extract_from_data(
+                        value,
+                        max_depth=max_depth,
+                        _depth=_depth + 1,
+                        _seen_ids=_seen_ids,
+                    )
+                )
     elif isinstance(data, list):
+        data_id = id(data)
+        if data_id in _seen_ids:
+            return results
+        _seen_ids.add(data_id)
+
         for item in data:
-            results.extend(_extract_from_data(item))
+            results.extend(
+                _extract_from_data(
+                    item,
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                    _seen_ids=_seen_ids,
+                )
+            )
 
     return results
 

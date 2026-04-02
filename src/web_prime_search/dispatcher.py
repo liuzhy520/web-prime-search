@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Awaitable, Callable, Dict, List, Optional
+from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
 
 from web_prime_search.config import Settings, get_settings
 from web_prime_search.engines import baidu, douyin, google, x
@@ -18,6 +18,73 @@ ENGINE_REGISTRY: Dict[str, Callable[..., Awaitable[List[SearchResult]]]] = {
     "baidu": baidu.search,
 }
 
+SUPPORTED_ENGINES: Tuple[str, ...] = tuple(ENGINE_REGISTRY.keys())
+
+
+def _normalize_engine_names(engine_names: Iterable[str]) -> List[str]:
+    normalized: List[str] = []
+    seen: set[str] = set()
+    for name in engine_names:
+        candidate = name.strip().lower()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        normalized.append(candidate)
+    return normalized
+
+
+def _partition_known_engines(engine_names: Iterable[str]) -> tuple[List[str], List[str]]:
+    valid: List[str] = []
+    invalid: List[str] = []
+    for name in engine_names:
+        if ENGINE_REGISTRY.get(name) is not None:
+            valid.append(name)
+        else:
+            invalid.append(name)
+    return valid, invalid
+
+
+def resolve_engine_list(
+    engines: Optional[List[str]],
+    settings: Settings,
+) -> List[str]:
+    """Resolve requested engines to a valid execution order.
+
+    Request-specific engines take precedence when at least one valid engine is
+    supplied. Invalid entries are ignored. If the requested list is empty or has
+    no valid engines, the configured default priority is used instead.
+    """
+    default_candidates = _normalize_engine_names(settings.search_priority)
+    default_engines, invalid_defaults = _partition_known_engines(default_candidates)
+    if invalid_defaults:
+        logger.warning(
+            "Ignoring invalid engines in WPS_SEARCH_PRIORITY: %s",
+            ", ".join(invalid_defaults),
+        )
+    if not default_engines:
+        logger.warning(
+            "Configured search priority has no valid engines; using built-in defaults"
+        )
+        default_engines = list(SUPPORTED_ENGINES)
+
+    if engines is None:
+        return default_engines
+
+    requested_candidates = _normalize_engine_names(engines)
+    requested_engines, invalid_requested = _partition_known_engines(requested_candidates)
+    if invalid_requested:
+        logger.warning(
+            "Ignoring invalid requested engines: %s",
+            ", ".join(invalid_requested),
+        )
+    if requested_engines:
+        return requested_engines
+
+    logger.warning(
+        "No valid requested engines supplied; falling back to default priority"
+    )
+    return default_engines
+
 
 async def search_engine(
     engine_name: str,
@@ -31,7 +98,20 @@ async def search_engine(
         logger.warning("Unknown engine: %s, skipping", engine_name)
         return []
     try:
-        return await func(query, max_results=max_results, settings=settings)
+        coroutine = func(query, max_results=max_results, settings=settings)
+        if settings.engine_timeout_seconds > 0:
+            return await asyncio.wait_for(
+                coroutine,
+                timeout=settings.engine_timeout_seconds,
+            )
+        return await coroutine
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Engine %s timed out after %.1f seconds",
+            engine_name,
+            settings.engine_timeout_seconds,
+        )
+        return []
     except Exception as exc:
         logger.warning("Engine %s failed: %s", engine_name, exc)
         return []
@@ -59,7 +139,7 @@ async def multi_search(
     if settings is None:
         settings = get_settings()
 
-    engine_list = engines if engines is not None else settings.search_priority
+    engine_list = resolve_engine_list(engines, settings)
 
     # Run all engines concurrently
     tasks = [

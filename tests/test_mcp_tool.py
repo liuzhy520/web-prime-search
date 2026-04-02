@@ -7,8 +7,6 @@ import pytest
 from web_prime_search.mcp_tool import mcp, web_search
 from web_prime_search.models import SearchResult
 
-pytestmark = pytest.mark.asyncio
-
 
 def test_mcp_server_name():
     """MCP server has the expected name."""
@@ -22,6 +20,7 @@ def test_tool_registered():
 
 
 @patch("web_prime_search.mcp_tool.multi_search")
+@pytest.mark.asyncio
 async def test_web_search_calls_dispatcher(mock_multi: AsyncMock):
     """web_search delegates to multi_search and formats output."""
     mock_multi.return_value = [
@@ -58,6 +57,7 @@ async def test_web_search_calls_dispatcher(mock_multi: AsyncMock):
 
 
 @patch("web_prime_search.mcp_tool.multi_search")
+@pytest.mark.asyncio
 async def test_web_search_defaults(mock_multi: AsyncMock):
     """web_search passes default arguments when optional params omitted."""
     mock_multi.return_value = []
