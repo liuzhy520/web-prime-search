@@ -40,9 +40,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     search_parser.add_argument(
         "--engines",
+        "--engine",
+        dest="engines",
         help=(
             "Comma-separated engines to use for this request. Supported values: "
             + ", ".join(SUPPORTED_ENGINES)
+            + ". Alias: google_api -> google."
         ),
     )
     search_parser.add_argument(

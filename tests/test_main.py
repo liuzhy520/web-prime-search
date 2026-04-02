@@ -52,3 +52,16 @@ def test_main_search_prints_json(mock_multi_search, capsys) -> None:
             "summary": "top summary",
         }
     ]
+
+@patch("web_prime_search.__main__.multi_search", new_callable=AsyncMock)
+def test_main_search_accepts_single_engine_alias_option(mock_multi_search, capsys) -> None:
+    mock_multi_search.return_value = []
+
+    main(["search", "--query", "geo", "--engine", "google_api", "--max-results", "2"])
+
+    mock_multi_search.assert_awaited_once_with(
+        query="geo",
+        engines=["google_api"],
+        max_results=2,
+    )
+    assert json.loads(capsys.readouterr().out) == []

@@ -19,12 +19,16 @@ class Settings(BaseSettings):
     volcengine_web_search_model: str = ""
     proxy_url: str = "http://127.0.0.1:7897"
     engine_timeout_seconds: float = 35.0
+    google_html_persist_profile: bool = True
+    google_html_profile_dir: str = ""
+    google_html_cookie_file: str = ""
+    google_html_stealth: bool = True
     search_priority: List[str] = [
+        "google",
         "google_html",
         "duckduckgo",
         "douyin",
         "baidu",
-        "google",
         "x",
     ]
     proxy_engines: List[str] = ["x", "google", "google_html", "duckduckgo"]

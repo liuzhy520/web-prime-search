@@ -1,13 +1,22 @@
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+import json
+import logging
+import os
 import re
+import sys
+import time
 from html import unescape
+from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, quote_plus, unquote, urlsplit
 
 from web_prime_search.config import Settings, get_settings
 from web_prime_search.models import SearchResult
 from web_prime_search.proxy import get_http_client
+
+logger = logging.getLogger(__name__)
 
 _SEARCH_URL = "https://www.google.com/search"
 _BROWSER_USER_AGENT = (
@@ -44,8 +53,37 @@ _BLOCK_MARKERS = (
     "consent.google.com",
     'id="captcha-form"',
     "httpservice/retry/enablejs",
+    "enable javascript to continue",
+    "sorry/index",
     "/sorry/",
 )
+_STEALTH_INIT_SCRIPT = """
+() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'en'] });
+    Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
+    Object.defineProperty(navigator, 'vendor', { get: () => 'Google Inc.' });
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => [
+            { name: 'Chrome PDF Plugin' },
+            { name: 'Chrome PDF Viewer' },
+            { name: 'Native Client' },
+        ],
+    });
+    window.chrome = window.chrome || { runtime: {} };
+
+    const permissions = window.navigator.permissions;
+    if (permissions && permissions.query) {
+        const originalQuery = permissions.query.bind(permissions);
+        permissions.query = (parameters) => {
+            if (parameters && parameters.name === 'notifications') {
+                return Promise.resolve({ state: Notification.permission });
+            }
+            return originalQuery(parameters);
+        };
+    }
+}
+"""
 _BROWSER_EXTRACTION_SCRIPT = """
 () => {
     const selectors = ['div.VwiC3b', 'span.aCOpRe', 'div.s3v9rd', 'div.MUxGbd'];
@@ -138,6 +176,7 @@ async def _search_via_http(
 
         html = response.text
         if _is_blocked_page(html):
+            _log_blocked_page("http", html)
             raise ValueError("Google HTML search blocked by anti-bot or consent page")
 
         return _parse_results(html)
@@ -157,57 +196,21 @@ async def _search_via_browser(
     except ImportError as exc:
         raise ValueError("Playwright browser fallback is not installed") from exc
 
-    timeout_ms = _resolve_browser_timeout(settings.engine_timeout_seconds)
     try:
-        async with async_playwright() as playwright:
-            browser = await _launch_browser(playwright, settings)
-            try:
-                context = await browser.new_context(
-                    locale="zh-CN",
-                    ignore_https_errors=True,
-                    user_agent=_BROWSER_USER_AGENT,
-                )
-                await context.add_init_script(
-                    """
-                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                    window.chrome = window.chrome || { runtime: {} };
-                    Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN', 'zh', 'en']});
-                    """
-                )
-                page = await context.new_page()
-                try:
-                    await page.goto(
-                        _build_search_url(query, max_results),
-                        wait_until="domcontentloaded",
-                        timeout=timeout_ms,
-                    )
-                    try:
-                        await page.wait_for_selector("a h3", timeout=max(1000, timeout_ms // 2))
-                    except PlaywrightTimeoutError:
-                        pass
-                    try:
-                        await page.wait_for_load_state(
-                            "networkidle",
-                            timeout=max(1000, timeout_ms // 2),
-                        )
-                    except PlaywrightTimeoutError:
-                        pass
-
-                    html = await page.content()
-                    if _is_blocked_page(html):
-                        raise ValueError("Google HTML search blocked by anti-bot or consent page")
-
-                    items = await page.evaluate(_BROWSER_EXTRACTION_SCRIPT)
-                    results = _build_results_from_browser_items(items)
-                    if results:
-                        return results[:max_results]
-                    return _parse_results(html)[:max_results]
-                finally:
-                    await context.close()
-            finally:
-                await browser.close()
+        return await asyncio.wait_for(
+            _run_browser_search(
+                query=query,
+                max_results=max_results,
+                settings=settings,
+                async_playwright=async_playwright,
+                playwright_timeout_error=PlaywrightTimeoutError,
+            ),
+            timeout=_resolve_browser_timeout_budget(settings.engine_timeout_seconds),
+        )
     except ValueError:
         raise
+    except asyncio.TimeoutError as exc:
+        raise ValueError("Google HTML browser fallback timed out") from exc
     except PlaywrightTimeoutError as exc:
         raise ValueError("Google HTML browser fallback timed out") from exc
     except PlaywrightError as exc:
@@ -215,13 +218,88 @@ async def _search_via_browser(
         raise ValueError(f"Google HTML browser fallback error: {message}") from exc
 
 
+async def _run_browser_search(
+    query: str,
+    max_results: int,
+    settings: Settings,
+    async_playwright: Any,
+    playwright_timeout_error: type[Exception],
+) -> list[SearchResult]:
+    timeout_ms = _resolve_browser_timeout(settings.engine_timeout_seconds)
+    navigation_timeout_ms = _resolve_browser_navigation_timeout(timeout_ms)
+    render_wait_ms = _resolve_browser_render_wait(timeout_ms)
+    async with async_playwright() as playwright:
+        context, browser = await _open_browser_context(playwright, settings)
+        try:
+            await _apply_stealth(context, settings)
+            await _load_cookies(context, settings)
+            existing_pages = getattr(context, "pages", None)
+            if isinstance(existing_pages, list) and existing_pages:
+                page = existing_pages[0]
+            else:
+                page = await context.new_page()
+
+            try:
+                await page.goto(
+                    _build_search_url(query, max_results),
+                    wait_until="domcontentloaded",
+                    timeout=navigation_timeout_ms,
+                )
+
+                html = await page.content()
+                if _is_blocked_page(html):
+                    _log_blocked_page("browser", html)
+                    raise ValueError("Google HTML search blocked by anti-bot or consent page")
+
+                items = await page.evaluate(_BROWSER_EXTRACTION_SCRIPT)
+                results = _build_results_from_browser_items(items)
+                if results:
+                    return results[:max_results]
+
+                try:
+                    await page.wait_for_timeout(render_wait_ms)
+                except playwright_timeout_error:
+                    pass
+
+                html = await page.content()
+                if _is_blocked_page(html):
+                    _log_blocked_page("browser", html)
+                    raise ValueError("Google HTML search blocked by anti-bot or consent page")
+
+                items = await page.evaluate(_BROWSER_EXTRACTION_SCRIPT)
+                results = _build_results_from_browser_items(items)
+                if results:
+                    return results[:max_results]
+                return _parse_results(html)[:max_results]
+            finally:
+                await _save_cookies(context, settings)
+                await context.close()
+        finally:
+            if browser is not None:
+                await browser.close()
+
+
+async def _open_browser_context(playwright: Any, settings: Settings) -> tuple[Any, Any | None]:
+    if _should_use_persistent_profile(settings):
+        profile_dir = _resolve_profile_dir(settings)
+        try:
+            profile_dir.mkdir(parents=True, exist_ok=True)
+            context = await _launch_persistent_context(playwright, settings, profile_dir)
+            return context, None
+        except Exception as exc:
+            logger.warning(
+                "Google HTML persistent profile unavailable at %s: %s; falling back to ephemeral browser context",
+                profile_dir,
+                _format_exception(exc),
+            )
+
+    browser = await _launch_browser(playwright, settings)
+    context = await browser.new_context(**_build_context_kwargs(settings))
+    return context, browser
+
+
 async def _launch_browser(playwright: Any, settings: Settings) -> Any:
-    launch_kwargs: dict[str, Any] = {
-        "headless": True,
-        "args": ["--disable-blink-features=AutomationControlled"],
-    }
-    if "google_html" in settings.proxy_engines:
-        launch_kwargs["proxy"] = {"server": settings.proxy_url}
+    launch_kwargs = _build_launch_kwargs(settings)
 
     try:
         return await playwright.chromium.launch(channel="chrome", **launch_kwargs)
@@ -229,9 +307,259 @@ async def _launch_browser(playwright: Any, settings: Settings) -> Any:
         return await playwright.chromium.launch(**launch_kwargs)
 
 
-def _is_blocked_page(html: str) -> bool:
+async def _launch_persistent_context(
+    playwright: Any,
+    settings: Settings,
+    profile_dir: Path,
+) -> Any:
+    launch_kwargs = _build_launch_kwargs(settings)
+    context_kwargs = _build_context_kwargs(settings)
+
+    try:
+        return await playwright.chromium.launch_persistent_context(
+            str(profile_dir),
+            channel="chrome",
+            **launch_kwargs,
+            **context_kwargs,
+        )
+    except Exception:
+        return await playwright.chromium.launch_persistent_context(
+            str(profile_dir),
+            **launch_kwargs,
+            **context_kwargs,
+        )
+
+
+async def _apply_stealth(context: Any, settings: Settings) -> None:
+    if not settings.google_html_stealth:
+        return
+
+    try:
+        await context.add_init_script(_STEALTH_INIT_SCRIPT)
+    except Exception as exc:
+        logger.warning(
+            "Google HTML stealth init script failed: %s",
+            _format_exception(exc),
+        )
+
+
+async def _load_cookies(context: Any, settings: Settings) -> None:
+    cookie_file = _resolve_cookie_file(settings)
+    if cookie_file is None:
+        return
+
+    try:
+        payload = json.loads(cookie_file.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning(
+            "Google HTML cookie preload skipped for %s: %s",
+            cookie_file,
+            _format_exception(exc),
+        )
+        return
+
+    cookies = _normalize_cookie_payload(payload)
+    if not cookies:
+        return
+
+    try:
+        await context.add_cookies(cookies)
+    except Exception as exc:
+        logger.warning(
+            "Google HTML cookie preload failed for %s: %s",
+            cookie_file,
+            _format_exception(exc),
+        )
+
+
+async def _save_cookies(context: Any, settings: Settings) -> None:
+    cookie_file = _resolve_cookie_file(settings)
+    if cookie_file is None:
+        return
+
+    try:
+        cookies = await context.cookies()
+        normalized = _normalize_cookie_payload(cookies)
+        cookie_file.parent.mkdir(parents=True, exist_ok=True)
+        cookie_file.write_text(
+            json.dumps(normalized, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        logger.warning(
+            "Google HTML cookie persistence failed for %s: %s",
+            cookie_file,
+            _format_exception(exc),
+        )
+
+
+def _build_launch_kwargs(settings: Settings) -> dict[str, Any]:
+    args = ["--disable-blink-features=AutomationControlled"]
+    if settings.google_html_stealth:
+        args.extend(
+            [
+                "--disable-background-networking",
+                "--disable-default-apps",
+                "--disable-dev-shm-usage",
+                "--no-default-browser-check",
+            ]
+        )
+
+    launch_kwargs: dict[str, Any] = {
+        "headless": True,
+        "args": args,
+    }
+    if "google_html" in settings.proxy_engines:
+        launch_kwargs["proxy"] = {"server": settings.proxy_url}
+    return launch_kwargs
+
+
+def _build_context_kwargs(settings: Settings) -> dict[str, Any]:
+    headers = {
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "DNT": "1",
+    }
+    if settings.google_html_stealth:
+        headers["Upgrade-Insecure-Requests"] = "1"
+
+    return {
+        "locale": "zh-CN",
+        "ignore_https_errors": True,
+        "user_agent": _BROWSER_USER_AGENT,
+        "timezone_id": "Asia/Shanghai",
+        "viewport": {"width": 1366, "height": 900},
+        "screen": {"width": 1366, "height": 900},
+        "color_scheme": "light",
+        "extra_http_headers": headers,
+    }
+
+
+def _should_use_persistent_profile(settings: Settings) -> bool:
+    return settings.google_html_persist_profile or bool(settings.google_html_profile_dir.strip())
+
+
+def _resolve_profile_dir(settings: Settings) -> Path:
+    configured = settings.google_html_profile_dir.strip()
+    if configured:
+        return Path(configured).expanduser()
+    return _default_profile_dir()
+
+
+def _resolve_cookie_file(settings: Settings) -> Path | None:
+    configured = settings.google_html_cookie_file.strip()
+    if not configured:
+        return None
+    return Path(configured).expanduser()
+
+
+def _default_profile_dir() -> Path:
+    home = Path.home()
+    if sys.platform == "darwin":
+        base = home / "Library" / "Caches"
+    elif os.name == "nt":
+        base = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
+    else:
+        base = Path(os.environ.get("XDG_CACHE_HOME", home / ".cache"))
+    return base / "web-prime-search" / "google-html-profile"
+
+
+def _normalize_cookie_payload(payload: object) -> list[dict[str, Any]]:
+    if not isinstance(payload, list):
+        return []
+
+    now = time.time()
+    normalized: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+
+        name = str(item.get("name") or "").strip()
+        value = str(item.get("value") or "")
+        domain = str(item.get("domain") or "").strip().lower()
+        path = str(item.get("path") or "/") or "/"
+        if not name or not value or not _is_google_cookie_domain(domain):
+            continue
+
+        expires = _normalize_cookie_expiry(item.get("expires"))
+        if expires is not None and expires > 0 and expires < now:
+            continue
+
+        key = (name, domain, path)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        cookie: dict[str, Any] = {
+            "name": name,
+            "value": value,
+            "domain": domain,
+            "path": path,
+            "httpOnly": bool(item.get("httpOnly", False)),
+            "secure": bool(item.get("secure", True)),
+        }
+        if expires is not None:
+            cookie["expires"] = expires
+
+        same_site = _normalize_same_site(item.get("sameSite"))
+        if same_site is not None:
+            cookie["sameSite"] = same_site
+
+        normalized.append(cookie)
+
+    return normalized
+
+
+def _normalize_cookie_expiry(value: object) -> float | None:
+    if value in (None, "", 0):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _normalize_same_site(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().capitalize()
+    if normalized in {"Lax", "None", "Strict"}:
+        return normalized
+    return None
+
+
+def _is_google_cookie_domain(domain: str) -> bool:
+    normalized = domain.lstrip(".")
+    return normalized == "google.com" or normalized.endswith(".google.com")
+
+
+def _blocked_marker(html: str) -> str | None:
     lowered = html.lower()
-    return any(marker in lowered for marker in _BLOCK_MARKERS)
+    for marker in _BLOCK_MARKERS:
+        if marker in lowered:
+            return marker
+    return None
+
+
+def _log_blocked_page(mode: str, html: str) -> None:
+    marker = _blocked_marker(html)
+    if marker is None:
+        return
+    logger.warning("Google HTML %s path hit blocked page marker: %s", mode, marker)
+
+
+def _format_exception(exc: Exception) -> str:
+    return str(exc).strip() or exc.__class__.__name__
+
+
+def _is_blocked_page(html: str) -> bool:
+    return _blocked_marker(html) is not None
 
 
 def _parse_results(html: str) -> list[SearchResult]:
@@ -337,6 +665,22 @@ def _build_search_url(query: str, max_results: int) -> str:
 
 
 def _resolve_browser_timeout(timeout_seconds: float) -> int:
+    return int(_resolve_browser_timeout_budget(timeout_seconds) * 1000)
+
+
+def _resolve_browser_timeout_budget(timeout_seconds: float) -> float:
     if timeout_seconds <= 0:
-        return 30000
-    return max(1000, int(timeout_seconds * 1000))
+        return 30.0
+    return max(5.0, timeout_seconds - 2.0)
+
+
+def _resolve_browser_step_timeout(timeout_ms: int) -> int:
+    return max(1000, timeout_ms // 3)
+
+
+def _resolve_browser_navigation_timeout(timeout_ms: int) -> int:
+    return min(timeout_ms, max(3000, timeout_ms // 2))
+
+
+def _resolve_browser_render_wait(timeout_ms: int) -> int:
+    return min(1500, max(500, timeout_ms // 10))

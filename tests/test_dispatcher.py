@@ -12,7 +12,7 @@ from web_prime_search.models import SearchResult
 pytestmark = pytest.mark.asyncio
 
 _SETTINGS = Settings(
-    search_priority=["google_html", "duckduckgo", "douyin", "baidu", "google", "x"],
+    search_priority=["google", "google_html", "duckduckgo", "douyin", "baidu", "x"],
 )
 
 
@@ -43,15 +43,15 @@ async def test_all_engines_succeed(mock_registry: dict):
     results = await multi_search("test query", settings=_SETTINGS)
 
     assert len(results) == 12
-    # Priority order: google_html first, then duckduckgo, douyin, baidu, google, x
-    assert results[0].source == "google_html"
-    assert results[1].source == "google_html"
-    assert results[2].source == "duckduckgo"
-    assert results[3].source == "duckduckgo"
-    assert results[4].source == "douyin"
-    assert results[5].source == "douyin"
-    assert results[6].source == "baidu"
-    assert results[8].source == "google"
+    # Priority order: google first, then google_html, duckduckgo, douyin, baidu, x
+    assert results[0].source == "google"
+    assert results[1].source == "google"
+    assert results[2].source == "google_html"
+    assert results[3].source == "google_html"
+    assert results[4].source == "duckduckgo"
+    assert results[5].source == "duckduckgo"
+    assert results[6].source == "douyin"
+    assert results[8].source == "baidu"
     assert results[10].source == "x"
 
 
@@ -132,20 +132,27 @@ async def test_unknown_engine_skipped(caplog):
 
 
 async def test_resolve_engine_list_normalizes_and_deduplicates():
-    settings = Settings(search_priority=["google_html", "duckduckgo", "douyin", "baidu", "google", "x"])
+    settings = Settings(search_priority=["google", "google_html", "duckduckgo", "douyin", "baidu", "x"])
 
     resolved = resolve_engine_list([" Google ", "baidu", "google", "", " X "], settings)
 
     assert resolved == ["google", "baidu", "x"]
 
+async def test_resolve_engine_list_accepts_google_api_alias():
+    settings = Settings(search_priority=["google", "google_html", "duckduckgo", "douyin", "baidu", "x"])
+
+    resolved = resolve_engine_list(["google_api", "baidu"], settings)
+
+    assert resolved == ["google", "baidu"]
+
 
 async def test_resolve_engine_list_falls_back_to_default_priority(caplog):
-    settings = Settings(search_priority=["google_html", "duckduckgo", "douyin", "baidu", "google", "x"])
+    settings = Settings(search_priority=["google", "google_html", "duckduckgo", "douyin", "baidu", "x"])
 
     with caplog.at_level(logging.WARNING):
         resolved = resolve_engine_list(["unknown", "   "], settings)
 
-    assert resolved == ["google_html", "duckduckgo", "douyin", "baidu", "google", "x"]
+    assert resolved == ["google", "google_html", "duckduckgo", "douyin", "baidu", "x"]
     assert "No valid requested engines supplied" in caplog.text
 
 
