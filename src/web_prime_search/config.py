@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     volcengine_web_search_model: str = ""
     proxy_url: str = "http://127.0.0.1:7897"
     engine_timeout_seconds: float = 35.0
-    search_priority: List[str] = ["google", "douyin", "duckduckgo", "baidu", "x"]
+    search_priority: List[str] = ["duckduckgo", "douyin", "baidu", "google", "x"]
     proxy_engines: List[str] = ["x", "google", "duckduckgo"]
     direct_engines: List[str] = ["douyin", "baidu"]
 

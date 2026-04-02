@@ -7,7 +7,7 @@
 
 支持的搜索引擎：`google`、`douyin`、`duckduckgo`、`baidu`、`x`。
 
-- 默认情况下，搜索会按配置中的优先级依次聚合结果；当前默认顺序为 `google`、`douyin`、`duckduckgo`、`baidu`、`x`。
+- 默认情况下，搜索会按配置中的优先级依次聚合结果；当前默认顺序为 `duckduckgo`、`douyin`、`baidu`、`google`、`x`。
 - 单次请求可以显式指定一个或多个搜索引擎，覆盖默认优先级。
 - 如果传入的引擎名全部无效，会自动回退到默认优先级继续搜索。
 - `douyin` 引擎现通过火山方舟 Ark Responses API 的联网搜索工具实现，不再直接抓取抖音网页。
