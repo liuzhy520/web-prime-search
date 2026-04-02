@@ -1,0 +1,14 @@
+{
+    "id": "TASK-001",
+    "title": "",
+    "status": "todo",
+    "owner": "executor",
+    "branch": "feat/TASK-001-short-name",
+    "worktree": "../wt-TASK-001",
+    "allowed_paths": [],
+    "forbidden_paths": [],
+    "shared_contracts": [],
+    "depends_on": [],
+    "acceptance": [],
+    "verification": []
+}

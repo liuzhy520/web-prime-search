@@ -1,0 +1,21 @@
+{
+    "run_id": "",
+    "goal": "",
+    "phase": "planning",
+    "owner": "orchestrator",
+    "created_at": "",
+    "updated_at": "",
+    "context": {
+        "compaction_count": 0,
+        "last_compacted_at": "",
+        "preserved_message_count": 4,
+        "total_context_chars": 0,
+        "key_files": [],
+        "pending_work": [],
+        "tools_used": [],
+        "decisions_made": [],
+        "current_work_summary": ""
+    },
+    "tasks": [],
+    "bugs": []
+}

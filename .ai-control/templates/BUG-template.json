@@ -1,0 +1,12 @@
+{
+    "id": "BUG-001",
+    "source_task": "TASK-001",
+    "status": "open",
+    "severity": "medium",
+    "owner": "orchestrator",
+    "repro": [],
+    "actual": "",
+    "expected": "",
+    "evidence": "",
+    "suggested_action": ""
+}
