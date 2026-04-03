@@ -1,4 +1,12 @@
 # web-prime-search
+
+## 里程碑 Milestone
+
+### v0.2.0 (2026-04-03)
+- 移除 Google API Key 相关配置与文档，避免混淆
+- `google_html` 搜索引擎优先级调整为最后
+- 文档、测试、配置同步更新
+
 给龙虾开发的基于本地网络代理，使用自动路由 google、duckduckgo、douyin、baidu、x、google_html 的网络搜索工具
 
 ---
