@@ -9,9 +9,7 @@ from web_prime_search.engines import baidu, douyin, duckduckgo, google, google_h
 from web_prime_search.models import SearchResult
 
 logger = logging.getLogger(__name__)
-ENGINE_ALIASES: Dict[str, str] = {
-    "google_api": "google",
-}
+ENGINE_ALIASES: Dict[str, str] = {}
 
 # Registry mapping engine name to its search function
 ENGINE_REGISTRY: Dict[str, Callable[..., Awaitable[List[SearchResult]]]] = {
@@ -29,6 +27,7 @@ SUPPORTED_ENGINES: Tuple[str, ...] = tuple(ENGINE_REGISTRY.keys())
 def _canonicalize_engine_name(name: str) -> str:
     candidate = name.strip().lower()
     return ENGINE_ALIASES.get(candidate, candidate)
+
 
 def _normalize_engine_names(engine_names: Iterable[str]) -> List[str]:
     normalized: List[str] = []

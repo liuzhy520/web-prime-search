@@ -12,7 +12,7 @@ from web_prime_search.models import SearchResult
 pytestmark = pytest.mark.asyncio
 
 _SETTINGS = Settings(
-    search_priority=["google", "google_html", "duckduckgo", "douyin", "baidu", "x"],
+    search_priority=["google", "duckduckgo", "douyin", "baidu", "x", "google_html"],
 )
 
 
@@ -43,16 +43,15 @@ async def test_all_engines_succeed(mock_registry: dict):
     results = await multi_search("test query", settings=_SETTINGS)
 
     assert len(results) == 12
-    # Priority order: google first, then google_html, duckduckgo, douyin, baidu, x
+    # Priority order: google first, then duckduckgo, douyin, baidu, x, google_html
     assert results[0].source == "google"
     assert results[1].source == "google"
-    assert results[2].source == "google_html"
-    assert results[3].source == "google_html"
-    assert results[4].source == "duckduckgo"
-    assert results[5].source == "duckduckgo"
-    assert results[6].source == "douyin"
-    assert results[8].source == "baidu"
-    assert results[10].source == "x"
+    assert results[2].source == "duckduckgo"
+    assert results[3].source == "duckduckgo"
+    assert results[4].source == "douyin"
+    assert results[6].source == "baidu"
+    assert results[8].source == "x"
+    assert results[10].source == "google_html"
 
 
 @patch("web_prime_search.dispatcher.ENGINE_REGISTRY")
@@ -70,7 +69,7 @@ async def test_one_engine_fails_fallback(mock_registry: dict, caplog):
     with caplog.at_level(logging.WARNING):
         results = await multi_search("test query", settings=_SETTINGS)
 
-    assert len(results) == 10  # google_html(2) + duckduckgo(2) + douyin(2) + baidu(2) + x(2), google failed
+    assert len(results) == 10  # duckduckgo(2) + douyin(2) + baidu(2) + x(2) + google_html(2), google failed
     sources = [r.source for r in results]
     assert "google" not in sources
     assert "Engine google failed" in caplog.text
@@ -132,27 +131,19 @@ async def test_unknown_engine_skipped(caplog):
 
 
 async def test_resolve_engine_list_normalizes_and_deduplicates():
-    settings = Settings(search_priority=["google", "google_html", "duckduckgo", "douyin", "baidu", "x"])
+    settings = Settings(search_priority=["google", "duckduckgo", "douyin", "baidu", "x", "google_html"])
 
     resolved = resolve_engine_list([" Google ", "baidu", "google", "", " X "], settings)
 
     assert resolved == ["google", "baidu", "x"]
 
-async def test_resolve_engine_list_accepts_google_api_alias():
-    settings = Settings(search_priority=["google", "google_html", "duckduckgo", "douyin", "baidu", "x"])
-
-    resolved = resolve_engine_list(["google_api", "baidu"], settings)
-
-    assert resolved == ["google", "baidu"]
-
-
 async def test_resolve_engine_list_falls_back_to_default_priority(caplog):
-    settings = Settings(search_priority=["google", "google_html", "duckduckgo", "douyin", "baidu", "x"])
+    settings = Settings(search_priority=["google", "duckduckgo", "douyin", "baidu", "x", "google_html"])
 
     with caplog.at_level(logging.WARNING):
         resolved = resolve_engine_list(["unknown", "   "], settings)
 
-    assert resolved == ["google", "google_html", "duckduckgo", "douyin", "baidu", "x"]
+    assert resolved == ["google", "duckduckgo", "douyin", "baidu", "x", "google_html"]
     assert "No valid requested engines supplied" in caplog.text
 
 

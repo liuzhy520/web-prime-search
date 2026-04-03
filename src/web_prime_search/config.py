@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables prefixed with WPS_."""
 
     x_bearer_token: str = ""
-    google_api_key: str = ""
     google_cx: str = ""
     douyin_cookie: str = ""
     volcengine_api_key: str = ""
@@ -25,13 +24,13 @@ class Settings(BaseSettings):
     google_html_stealth: bool = True
     search_priority: List[str] = [
         "google",
-        "google_html",
         "duckduckgo",
         "douyin",
         "baidu",
         "x",
+        "google_html",
     ]
-    proxy_engines: List[str] = ["x", "google", "google_html", "duckduckgo"]
+    proxy_engines: List[str] = ["x", "google", "duckduckgo", "google_html"]
     direct_engines: List[str] = ["douyin", "baidu"]
 
     model_config = {"env_prefix": "WPS_"}

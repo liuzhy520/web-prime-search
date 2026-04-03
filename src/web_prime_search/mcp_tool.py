@@ -8,7 +8,7 @@ from web_prime_search.dispatcher import multi_search
 
 mcp = FastMCP(
     "web-prime-search",
-    instructions="Multi-engine search tool with priority routing across Google HTML, Google CSE, DuckDuckGo, Douyin, Baidu, and X",
+    instructions="Multi-engine search tool with priority routing across Google CSE, DuckDuckGo, Douyin, Baidu, X, and Google HTML fallback",
 )
 
 
