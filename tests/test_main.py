@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from web_prime_search.__main__ import main
@@ -65,3 +66,30 @@ def test_main_search_accepts_single_engine_alias_option(mock_multi_search, capsy
         max_results=2,
     )
     assert json.loads(capsys.readouterr().out) == []
+
+
+def test_main_openclaw_config_prints_local_mcp_snippet(capsys) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+
+    main(
+        [
+            "openclaw-config",
+            "--python",
+            "/tmp/custom-python",
+            "--cwd",
+            str(repo_root),
+            "--server-name",
+            "web-prime-search-local",
+        ]
+    )
+
+    assert json.loads(capsys.readouterr().out) == {
+        "mcpServers": {
+            "web-prime-search-local": {
+                "command": "/tmp/custom-python",
+                "args": ["-m", "web_prime_search", "serve"],
+                "cwd": str(repo_root),
+                "env": {"PYTHONUNBUFFERED": "1"},
+            }
+        }
+    }

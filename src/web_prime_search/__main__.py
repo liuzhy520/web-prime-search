@@ -4,10 +4,34 @@ import argparse
 import asyncio
 import json
 from dataclasses import asdict
+from pathlib import Path
+import sys
 from typing import Sequence
 
 from web_prime_search.dispatcher import SUPPORTED_ENGINES, multi_search
 from web_prime_search.mcp_tool import mcp
+
+
+def _repository_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _build_openclaw_config(
+    *,
+    python_executable: str,
+    cwd: str,
+    server_name: str,
+) -> dict[str, object]:
+    return {
+        "mcpServers": {
+            server_name: {
+                "command": python_executable,
+                "args": ["-m", "web_prime_search", "serve"],
+                "cwd": cwd,
+                "env": {"PYTHONUNBUFFERED": "1"},
+            }
+        }
+    }
 
 
 def _parse_engine_list(raw_value: str | None) -> list[str] | None:
@@ -28,6 +52,28 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run the MCP server over stdio.",
     )
     serve_parser.set_defaults(command="serve")
+
+    openclaw_parser = subparsers.add_parser(
+        "openclaw-config",
+        help="Print a local MCP config snippet for OpenClaw.",
+    )
+    openclaw_parser.add_argument(
+        "--python",
+        dest="python_executable",
+        default=sys.executable,
+        help="Python executable that OpenClaw should launch.",
+    )
+    openclaw_parser.add_argument(
+        "--cwd",
+        default=str(_repository_root()),
+        help="Working directory for the MCP server; keep this at the repo root unless you know otherwise.",
+    )
+    openclaw_parser.add_argument(
+        "--server-name",
+        default=mcp.name,
+        help="Server name to register inside OpenClaw.",
+    )
+    openclaw_parser.set_defaults(command="openclaw-config")
 
     search_parser = subparsers.add_parser(
         "search",
@@ -73,6 +119,15 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     if args.command in (None, "serve"):
         mcp.run(transport="stdio")
+        return
+
+    if args.command == "openclaw-config":
+        payload = _build_openclaw_config(
+            python_executable=args.python_executable,
+            cwd=args.cwd,
+            server_name=args.server_name,
+        )
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
 
     if args.command == "search":
