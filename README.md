@@ -70,27 +70,6 @@ web-prime-search search --query "本月热点新闻" --engines google_html --max
 
 命令行结果会以 JSON 输出，便于脚本消费。
 
-生成 OpenClaw 可直接粘贴的本地 MCP 配置片段时，使用：
-
-```bash
-python -m web_prime_search openclaw-config
-python -m web_prime_search openclaw-config --python /absolute/path/to/python --cwd /absolute/path/to/web-prime-search
-```
-
-## OpenClaw Skill 接入
-
-仓库现在包含一个可直接给 OpenClaw 使用的本地 skill 包装目录 [openclaw/README.md](/Users/wayne/ai-projects/web-prime-search/web-prime-search/openclaw/README.md) 和示例配置 [openclaw/web-prime-search.mcp.json.example](/Users/wayne/ai-projects/web-prime-search/web-prime-search/openclaw/web-prime-search.mcp.json.example)。
-
-推荐接入方式：
-
-1. 把整个仓库复制到 OpenClaw 所在机器的本地目录。
-2. 在仓库根目录创建虚拟环境并安装依赖：`pip install -e .`。
-3. 安装 Playwright 浏览器运行时：`python -m playwright install chromium`。
-4. 从 `.env.example` 复制出 `.env`，至少填好 `WPS_GOOGLE_CX`、`WPS_VOLCENGINE_API_KEY` 和 `WPS_VOLCENGINE_WEB_SEARCH_MODEL`。
-5. 运行 `python -m web_prime_search openclaw-config`，把输出的 JSON 粘贴进 OpenClaw 的本地 MCP skill 配置。
-
-OpenClaw 启动这个 skill 时，工作目录必须指向仓库根目录；当前程序会从该目录自动加载 `.env`，如果没有 `.env` 则回退到 `.env.example`。
-
 ## Copilot 多 Agent 工作流说明
 
 本仓库已集成 VS Code Copilot Chat 多 agent 协作协议，支持如下 agent/skill：
