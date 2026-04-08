@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 import respx
@@ -240,6 +244,49 @@ async def test_search_requires_model():
                 volcengine_web_search_model="",
             ),
         )
+
+
+async def test_douyin_live_search_prints_results(capsys: pytest.CaptureFixture[str]) -> None:
+    if os.environ.get("WPS_RUN_LIVE_DOUYIN_TEST") != "1":
+        pytest.skip("Set WPS_RUN_LIVE_DOUYIN_TEST=1 to run the live Douyin search test")
+
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    src_path = str(repo_root / "src")
+    env["PYTHONPATH"] = src_path if not existing_pythonpath else os.pathsep.join([src_path, existing_pythonpath])
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "web_prime_search",
+            "search",
+            "--query",
+            "coding plan",
+            "--engines",
+            "douyin",
+            "--max-results",
+            "5",
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+    with capsys.disabled():
+        if completed.stdout.strip():
+            print(completed.stdout.strip())
+        if completed.stderr.strip():
+            print(completed.stderr.strip(), file=sys.stderr)
+
+    assert completed.returncode == 0, completed.stderr
+
+    payload = json.loads(completed.stdout)
+    assert payload, "Expected at least one live Douyin search result"
 
 
 @respx.mock

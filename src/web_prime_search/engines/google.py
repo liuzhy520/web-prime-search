@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 from typing import Any
 from urllib.parse import quote
 
@@ -19,9 +21,16 @@ from web_prime_search.engines.google_html import (
     _save_cookies,
 )
 from web_prime_search.models import SearchResult
+from web_prime_search.proxy import get_http_client
 
 _CSE_ENGINE_NAME = "google"
 _CSE_HOSTED_URL = "https://cse.google.com/cse"
+
+# AJAX (no-browser) path constants
+_CSE_JS_URL = "https://cse.google.com/cse.js"
+_CSE_ELEMENT_URL = "https://www.googleapis.com/customsearch/v1element"
+_CSE_TOK_RE = re.compile(r'"cse_tok"\s*:\s*"([^"]+)"')
+_FRONTEND_KEY_RE = re.compile(r'"key"\s*:\s*"(AIza[A-Za-z0-9_\-]{30,45})"')
 
 _RESULTS_READY_SCRIPT = """
 () => Boolean(
@@ -58,6 +67,33 @@ _DOM_EXTRACTION_SCRIPT = """
     }).filter(Boolean);
 }
 """
+
+
+def _extract_cse_tok(js_text: str) -> str:
+    """Extract the cse_tok value from a cse.js response."""
+    m = _CSE_TOK_RE.search(js_text)
+    return m.group(1) if m else ""
+
+
+def _extract_frontend_key(js_text: str) -> str:
+    """Extract the embedded frontend API key (AIza...) from a cse.js response."""
+    m = _FRONTEND_KEY_RE.search(js_text)
+    return m.group(1) if m else ""
+
+
+def _parse_jsonp(text: str) -> dict:
+    """Strip a JSONP wrapper and parse the inner JSON object."""
+    text = text.strip()
+    start = text.find("(")
+    if start == -1:
+        return {}
+    end = text.rfind(")")
+    if end <= start:
+        return {}
+    try:
+        return json.loads(text[start + 1 : end])
+    except (json.JSONDecodeError, ValueError):
+        return {}
 
 
 def _build_search_url(cx: str, query: str) -> str:
@@ -142,7 +178,85 @@ async def search(
     if not settings.google_cx:
         raise ValueError("Google CX is not configured")
 
+    # Fast path: CSE AJAX via httpx (no browser overhead, no anti-bot risk)
+    try:
+        return await _search_via_ajax(query, max_results, settings)
+    except Exception:
+        pass
+
+    # Fallback: Playwright browser (slower, but works when AJAX is blocked)
     return await _search_via_browser(query, max_results, settings)
+
+
+async def _search_via_ajax(
+    query: str,
+    max_results: int,
+    settings: Settings,
+) -> list[SearchResult]:
+    """Fetch CSE results via the undocumented v1element JSONP endpoint.
+
+    The CSE widget embeds a frontend API key and a per-session ``cse_tok``
+    inside ``cse.js``.  We extract both with a lightweight httpx request and
+    use them to call the same endpoint the widget would call, receiving JSONP
+    with standard result objects.
+
+    Raises ``ValueError`` on any failure so the caller can fall back to the
+    Playwright browser path.
+    """
+    client = get_http_client("google", settings)
+    try:
+        js_resp = await client.get(
+            _CSE_JS_URL,
+            params={"cx": settings.google_cx, "hl": "en"},
+        )
+        if js_resp.status_code != 200:
+            raise ValueError(
+                f"Google CSE JS fetch failed: HTTP {js_resp.status_code}"
+            )
+
+        cse_tok = _extract_cse_tok(js_resp.text)
+        frontend_key = _extract_frontend_key(js_resp.text)
+
+        if not cse_tok or not frontend_key:
+            raise ValueError(
+                "Google CSE: could not extract cse_tok or key from cse.js"
+            )
+
+        results_resp = await client.get(
+            _CSE_ELEMENT_URL,
+            params={
+                "key": frontend_key,
+                "cx": settings.google_cx,
+                "q": query,
+                "num": min(max_results, 10),
+                "hl": "en",
+                "cse_tok": cse_tok,
+                "rsz": "filtered_cse",
+                "source": "gcsc",
+                "gfns": "0",
+                "callback": "google.search.cse.api0",
+            },
+        )
+        if results_resp.status_code != 200:
+            raise ValueError(
+                f"Google CSE element API failed: HTTP {results_resp.status_code}"
+            )
+
+        data = _parse_jsonp(results_resp.text)
+        raw_results = data.get("results") or []
+
+        if not isinstance(raw_results, list):
+            raise ValueError("Google CSE AJAX: unexpected response shape")
+
+        # Empty results with no cursor metadata = blocked/malformed response
+        if not raw_results and not data.get("cursor"):
+            raise ValueError("Google CSE AJAX: empty response with no cursor")
+
+        return _build_results_from_items(raw_results, url_key="unescapedUrl")[
+            :max_results
+        ]
+    finally:
+        await client.aclose()
 
 
 async def _search_via_browser(

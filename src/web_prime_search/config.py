@@ -38,20 +38,34 @@ class Settings(BaseSettings):
 
 
 def _iter_env_candidates() -> tuple[Path, ...]:
-    cwd = Path.cwd().resolve()
     candidates: list[Path] = []
     seen: set[Path] = set()
 
+    def _add(p: Path) -> None:
+        if p not in seen:
+            candidates.append(p)
+            seen.add(p)
+
+    # Primary: walk up from cwd
+    cwd = Path.cwd().resolve()
     for directory in (cwd, *cwd.parents):
-        candidate = directory / ".env"
-        if candidate not in seen:
-            candidates.append(candidate)
-            seen.add(candidate)
+        _add(directory / ".env")
+
+    # Fallback: walk up from the package source directory (covers editable installs
+    # launched from a cwd outside the project tree, e.g. via OpenClaw)
+    pkg_dir = Path(__file__).resolve().parent
+    for directory in (pkg_dir, *pkg_dir.parents):
+        _add(directory / ".env")
 
     return tuple(candidates)
 
 
 def _resolve_env_files() -> tuple[str, ...]:
+    # Explicit override takes absolute precedence
+    explicit = os.environ.get("WPS_ENV_FILE", "").strip()
+    if explicit:
+        return (explicit,)
+
     for env_file in _iter_env_candidates():
         if env_file.is_file():
             return (str(env_file),)
