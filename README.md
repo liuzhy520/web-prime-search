@@ -3,6 +3,10 @@
 ## 里程碑 Milestone
 
 
+### v0.3.2 (2026-04-08)
+- `google` 引擎通过 CSE AJAX 路径（无需浏览器）优先拉取结果，失败时回退 Playwright；**不需要任何 API Key**，只需配置 `WPS_GOOGLE_CX`
+- OpenClaw 无需反复询问 Google API Key，该字段已从对外接口中移除
+
 ### v0.3.1 (2026-04-08)
 - 修复 `.env` 只在当前目录下查找导致 key 读取为空的问题，现支持从任意子目录启动自动向上查找
 - `get_settings()` 现在会在 `.env` 或 `WPS_*` 环境变量变更时自动重载，避免缓存脏值
@@ -33,7 +37,7 @@
 - `google_html` 引擎优先尝试直接抓取 Google 搜索结果页 HTML；若静态页面被 Google 的 JS/反爬机制拦住，会继续尝试 Playwright 浏览器 fallback。
 - `google_html` 的浏览器 fallback 现默认启用持久化 profile，会把浏览器状态保存在用户缓存目录下的稳定路径中；你也可以通过环境变量显式指定 profile 目录或 cookie 文件，以便复用已有状态。
 - `google_html` 属于 best-effort 引擎；如果静态 HTML 和浏览器 fallback 都遇到反爬、同意页或 `enablejs` 页面，会记录失败并自动降级到其他更可靠的引擎。默认优先级中它位于最后。
-- `google` 引擎现已改为基于 Google Programmable Search Element 的 CSE 浏览器方案，只需要配置 `WPS_GOOGLE_CX`。
+- `google` 引擎基于 Google Programmable Search Element（CSE），**不需要 API Key**，只需配置 `WPS_GOOGLE_CX`。搜索时优先走轻量 AJAX 路径（无浏览器启动），仅在被拦截时回退到 Playwright；OpenClaw 无需为此询问任何 API Key。
 - `douyin` 引擎现通过火山方舟 Ark Responses API 的联网搜索工具实现，不再直接抓取抖音网页。
 - `duckduckgo` 引擎通过 `ddgs` 包接入 DuckDuckGo 文本搜索，不需要单独的 API Key。
 - `douyin` 结果会优先返回较短的引用摘要；如果模型本身生成了热点概述，会额外放在 `summary` 字段里，便于直接展示。
