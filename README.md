@@ -3,6 +3,10 @@
 ## 里程碑 Milestone
 
 
+### v0.3.1 (2026-04-08)
+- 修复 `.env` 只在当前目录下查找导致 key 读取为空的问题，现支持从任意子目录启动自动向上查找
+- `get_settings()` 现在会在 `.env` 或 `WPS_*` 环境变量变更时自动重载，避免缓存脏值
+
 ### v0.3.0 (2026-04-08)
 - 移除 `.env` 和 `.env.example` 敏感信息及历史，安全合规
 - 运行时仅加载 `.env`，不再回退 `.env.example`
@@ -82,6 +86,16 @@ web-prime-search search --query "今天有什么热点新闻？" --engines duckd
 WPS_GOOGLE_HTML_PROFILE_DIR=~/Library/Caches/web-prime-search/google-html-profile \
 WPS_GOOGLE_HTML_COOKIE_FILE=~/Library/Caches/web-prime-search/google-cookies.json \
 web-prime-search search --query "本月热点新闻" --engines google_html --max-results 5
+```
+
+也可以直接调试单个引擎模块：
+
+```bash
+python -m web_prime_search.engines.google "coding plan"
+python -m web_prime_search.engines.duckduckgo "coding plan"
+python -m web_prime_search.engines.baidu "coding plan"
+python -m web_prime_search.engines.douyin "coding plan"
+python -m web_prime_search.engines.x "coding plan"
 ```
 
 命令行结果会以 JSON 输出，便于脚本消费。
