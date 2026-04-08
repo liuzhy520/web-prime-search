@@ -105,19 +105,20 @@ async def search_engine(
     if func is None:
         logger.warning("Unknown engine: %s, skipping", engine_name)
         return []
+    timeout_seconds = settings.timeout_for_engine(engine_name)
     try:
         coroutine = func(query, max_results=max_results, settings=settings)
-        if settings.engine_timeout_seconds > 0:
+        if timeout_seconds > 0:
             return await asyncio.wait_for(
                 coroutine,
-                timeout=settings.engine_timeout_seconds,
+                timeout=timeout_seconds,
             )
         return await coroutine
     except asyncio.TimeoutError:
         logger.warning(
             "Engine %s timed out after %.1f seconds",
             engine_name,
-            settings.engine_timeout_seconds,
+            timeout_seconds,
         )
         return []
     except Exception as exc:

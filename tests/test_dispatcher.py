@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -200,3 +201,28 @@ async def test_engine_timeout_returns_empty(mock_registry: dict, caplog):
 
     assert results == []
     assert "Engine x timed out" in caplog.text
+
+
+@patch("web_prime_search.dispatcher.ENGINE_REGISTRY")
+async def test_dispatcher_uses_douyin_specific_timeout(mock_registry: dict):
+    captured_timeouts: list[float] = []
+
+    async def fake_engine(*args: Any, **kwargs: Any):
+        return _make_results("douyin", 1)
+
+    async def fake_wait_for(coro, timeout):
+        captured_timeouts.append(timeout)
+        return await coro
+
+    settings = Settings(
+        search_priority=["douyin", "x"],
+        engine_timeout_seconds=35.0,
+        douyin_timeout_seconds=60.0,
+    )
+    mock_registry.get = lambda name: fake_engine if name in {"douyin", "x"} else None
+
+    with patch("web_prime_search.dispatcher.asyncio.wait_for", side_effect=fake_wait_for):
+        await search_engine("douyin", "test", 1, settings)
+        await search_engine("x", "test", 1, settings)
+
+    assert captured_timeouts == [60.0, 35.0]

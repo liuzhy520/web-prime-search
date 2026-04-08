@@ -3,6 +3,10 @@
 ## 里程碑 Milestone
 
 
+### v0.3.3 (2026-04-08)
+- `douyin` 引擎新增独立超时配置 `WPS_DOUYIN_TIMEOUT_SECONDS`，默认 60 秒
+- 其余引擎继续使用 `WPS_ENGINE_TIMEOUT_SECONDS`，默认 35 秒
+
 ### v0.3.2 (2026-04-08)
 - `google` 引擎通过 CSE AJAX 路径（无需浏览器）优先拉取结果，失败时回退 Playwright；**不需要任何 API Key**，只需配置 `WPS_GOOGLE_CX`
 - OpenClaw 无需反复询问 Google API Key，该字段已从对外接口中移除
@@ -39,6 +43,7 @@
 - `google_html` 属于 best-effort 引擎；如果静态 HTML 和浏览器 fallback 都遇到反爬、同意页或 `enablejs` 页面，会记录失败并自动降级到其他更可靠的引擎。默认优先级中它位于最后。
 - `google` 引擎基于 Google Programmable Search Element（CSE），**不需要 API Key**，只需配置 `WPS_GOOGLE_CX`。搜索时优先走轻量 AJAX 路径（无浏览器启动），仅在被拦截时回退到 Playwright；OpenClaw 无需为此询问任何 API Key。
 - `douyin` 引擎现通过火山方舟 Ark Responses API 的联网搜索工具实现，不再直接抓取抖音网页。
+- `douyin` 引擎默认单独使用 60 秒超时窗口；其他引擎继续使用全局默认 35 秒超时。
 - `duckduckgo` 引擎通过 `ddgs` 包接入 DuckDuckGo 文本搜索，不需要单独的 API Key。
 - `douyin` 结果会优先返回较短的引用摘要；如果模型本身生成了热点概述，会额外放在 `summary` 字段里，便于直接展示。
 
@@ -54,6 +59,8 @@
 - `WPS_VOLCENGINE_API_KEY`：火山方舟 API Key，`douyin` 引擎必填。
 - `WPS_VOLCENGINE_WEB_SEARCH_MODEL`：用于联网搜索的火山模型 ID，`douyin` 引擎必填。
 - `WPS_VOLCENGINE_RESPONSES_URL`：可选，默认值为 `https://ark.cn-beijing.volces.com/api/v3/responses`。
+- `WPS_ENGINE_TIMEOUT_SECONDS`：除 `douyin` 外的引擎统一超时时间，默认 35 秒。
+- `WPS_DOUYIN_TIMEOUT_SECONDS`：`douyin` 引擎专用超时时间，默认 60 秒。
 - `duckduckgo` 引擎默认复用 `WPS_PROXY_URL` 和 `WPS_ENGINE_TIMEOUT_SECONDS`，无需额外环境变量。
 - `WPS_DOUYIN_COOKIE`：已废弃，新的 `douyin` 实现不会再使用该配置。
 

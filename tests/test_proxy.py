@@ -60,8 +60,19 @@ class TestGetHttpClient:
 
     def test_default_timeout(self, settings: Settings) -> None:
         client = get_http_client("x", settings=settings)
-        assert client.timeout.connect == 30.0
-        assert client.timeout.read == 30.0
+        assert client.timeout.connect == 35.0
+        assert client.timeout.read == 35.0
+
+    def test_douyin_uses_dedicated_timeout(self, settings: Settings) -> None:
+        client = get_http_client("douyin", settings=settings)
+        assert client.timeout.connect == 60.0
+        assert client.timeout.read == 60.0
+
+    def test_non_douyin_uses_configured_default_timeout(self) -> None:
+        custom = Settings(engine_timeout_seconds=42.0, douyin_timeout_seconds=60.0)
+        client = get_http_client("google", settings=custom)
+        assert client.timeout.connect == 42.0
+        assert client.timeout.read == 42.0
 
     def test_default_user_agent(self, settings: Settings) -> None:
         client = get_http_client("x", settings=settings)

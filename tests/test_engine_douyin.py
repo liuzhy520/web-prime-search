@@ -6,9 +6,11 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import respx
+import httpx
 from httpx import Response
 
 from web_prime_search.config import Settings
@@ -244,6 +246,44 @@ async def test_search_requires_model():
                 volcengine_web_search_model="",
             ),
         )
+
+
+@patch("web_prime_search.engines.douyin.get_http_client")
+async def test_search_maps_timeout_exception(mock_get_http_client) -> None:
+    client = AsyncMock()
+    client.post.side_effect = httpx.TimeoutException("timed out")
+    mock_get_http_client.return_value = client
+
+    with pytest.raises(ValueError, match="Volcengine API request timed out"):
+        await search("opc", settings=_SETTINGS)
+
+    client.aclose.assert_awaited_once()
+
+
+@patch("web_prime_search.engines.douyin.get_http_client")
+async def test_search_uses_douyin_specific_http_client_timeout(mock_get_http_client) -> None:
+    captured_settings: list[Settings] = []
+    client = AsyncMock()
+    client.post.return_value = Response(200, json={"references": []})
+
+    def fake_get_http_client(engine: str, settings: Settings):
+        assert engine == "douyin"
+        captured_settings.append(settings)
+        return client
+
+    custom_settings = Settings(
+        volcengine_api_key="ark_test_key",
+        volcengine_responses_url=_RESPONSES_URL,
+        volcengine_web_search_model=_MODEL,
+        engine_timeout_seconds=35.0,
+        douyin_timeout_seconds=60.0,
+    )
+    mock_get_http_client.side_effect = fake_get_http_client
+
+    await search("opc", settings=custom_settings)
+
+    assert captured_settings[0].timeout_for_engine("douyin") == 60.0
+    client.aclose.assert_awaited_once()
 
 
 async def test_douyin_live_search_prints_results(capsys: pytest.CaptureFixture[str]) -> None:

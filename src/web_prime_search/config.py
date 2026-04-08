@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     volcengine_web_search_model: str = ""
     proxy_url: str = "http://127.0.0.1:7897"
     engine_timeout_seconds: float = 35.0
+    douyin_timeout_seconds: float = 60.0
     google_html_persist_profile: bool = True
     google_html_profile_dir: str = ""
     google_html_cookie_file: str = ""
@@ -35,6 +36,11 @@ class Settings(BaseSettings):
     direct_engines: List[str] = ["douyin", "baidu"]
 
     model_config = {"env_prefix": "WPS_"}
+
+    def timeout_for_engine(self, engine: str) -> float:
+        if engine == "douyin":
+            return self.douyin_timeout_seconds
+        return self.engine_timeout_seconds
 
 
 def _iter_env_candidates() -> tuple[Path, ...]:

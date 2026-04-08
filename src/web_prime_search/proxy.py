@@ -14,8 +14,6 @@ _DEFAULT_HEADERS = {
     ),
 }
 
-_DEFAULT_TIMEOUT = httpx.Timeout(30.0)
-
 
 def get_http_client(
     engine: str,
@@ -34,7 +32,7 @@ def get_http_client(
 
     kwargs: dict = {
         "headers": _DEFAULT_HEADERS,
-        "timeout": _DEFAULT_TIMEOUT,
+        "timeout": httpx.Timeout(settings.timeout_for_engine(engine)),
     }
 
     if engine in settings.proxy_engines:
