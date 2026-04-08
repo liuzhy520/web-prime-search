@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import quote
 
 from web_prime_search.config import Settings, get_settings
+from web_prime_search.engines._cli import run_engine_cli
 from web_prime_search.engines.google_html import (
     _apply_stealth,
     _format_exception,
@@ -256,3 +257,11 @@ async def _submit_search(
         await page.click("button.gsc-search-button, .gsc-search-button-v2", timeout=timeout_ms)
     except playwright_timeout_error:
         return
+
+
+def main(argv: list[str] | None = None) -> int:
+    return run_engine_cli("google", search, argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

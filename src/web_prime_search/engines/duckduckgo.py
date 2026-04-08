@@ -8,6 +8,7 @@ from ddgs import DDGS
 from ddgs.exceptions import DDGSException, RatelimitException, TimeoutException
 
 from web_prime_search.config import Settings, get_settings
+from web_prime_search.engines._cli import run_engine_cli
 from web_prime_search.models import SearchResult
 
 
@@ -103,3 +104,11 @@ def _resolve_timeout(timeout_seconds: float) -> int | None:
     if timeout_seconds <= 0:
         return None
     return max(1, int(timeout_seconds))
+
+
+def main(argv: list[str] | None = None) -> int:
+    return run_engine_cli("duckduckgo", search, argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

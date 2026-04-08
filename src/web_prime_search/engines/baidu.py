@@ -4,6 +4,7 @@ import re
 from html import unescape
 
 from web_prime_search.config import Settings, get_settings
+from web_prime_search.engines._cli import run_engine_cli
 from web_prime_search.models import SearchResult
 from web_prime_search.proxy import get_http_client
 
@@ -93,3 +94,11 @@ def _extract_snippet(block: str) -> str:
         return ""
     snippet = re.sub(r"<[^>]+>", "", match.group(1)).strip()
     return unescape(snippet)
+
+
+def main(argv: list[str] | None = None) -> int:
+    return run_engine_cli("baidu", search, argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
