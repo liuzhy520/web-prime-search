@@ -37,11 +37,10 @@ class Settings(BaseSettings):
 
 
 def _resolve_env_files() -> tuple[str, ...]:
-    env_files: list[str] = []
-    for candidate in (".env.example", ".env"):
-        if Path(candidate).is_file():
-            env_files.append(candidate)
-    return tuple(env_files)
+    env_file = Path(".env")
+    if env_file.is_file():
+        return (str(env_file),)
+    return ()
 
 
 @functools.lru_cache(maxsize=1)
