@@ -28,7 +28,8 @@
 
 ### 配置说明
 
-- 在仓库根目录手动创建 `.env` 并填写真实配置；应用运行时只会自动加载该文件。
+- 先复制 [.env.template](.env.template) 为 `.env`，再填写真实配置；应用运行时只会自动加载 `.env`。
+- 可直接执行：`cp .env.template .env`
 - `google_html` 引擎默认复用 `WPS_PROXY_URL` 和 `WPS_ENGINE_TIMEOUT_SECONDS`；第三阶段额外支持 `WPS_GOOGLE_HTML_PERSIST_PROFILE`、`WPS_GOOGLE_HTML_PROFILE_DIR`、`WPS_GOOGLE_HTML_COOKIE_FILE` 与 `WPS_GOOGLE_HTML_STEALTH`。
 - 当 `WPS_GOOGLE_HTML_PERSIST_PROFILE=true` 且未显式指定 `WPS_GOOGLE_HTML_PROFILE_DIR` 时，程序会自动选择用户缓存目录下的 `web-prime-search/google-html-profile` 作为持久化 profile 目录。
 - `WPS_GOOGLE_HTML_COOKIE_FILE` 为可选项，仅在你想显式导入或回写 Google cookie 时才需要配置；文件损坏或不可写时会跳过，不会阻塞搜索。
