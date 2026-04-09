@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "web-prime-search"
-version = "0.3.2"
+version = "0.3.4"
 description = "Multi-engine search tool for OpenClaw with priority routing through Clash proxy"
 requires-python = ">=3.9"
 dependencies = [

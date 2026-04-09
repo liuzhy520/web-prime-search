@@ -3,7 +3,11 @@
 ## 里程碑 Milestone
 
 
-### v0.3.3 (2026-04-08)
+### v0.3.4 (2026-04-09)
+- `.env` 配置发现顺序增强，支持 OpenClaw 技能目录、cwd、入口路径多重兜底，重启/切换上下文后依然能稳定找到正确配置
+- 回归测试覆盖 OpenClaw 场景、cwd 变化、包目录 fallback、入口路径 fallback 等多种启动方式
+- 文档同步说明 `.env` 解析优先级和推荐用法
+- 兼容原有 `.env` 持久化配置方式，未引入新存储模型
 - `douyin` 引擎新增独立超时配置 `WPS_DOUYIN_TIMEOUT_SECONDS`，默认 60 秒
 - 其余引擎继续使用 `WPS_ENGINE_TIMEOUT_SECONDS`，默认 35 秒
 
@@ -51,6 +55,9 @@
 
 - 先复制 [.env.template](.env.template) 为 `.env`，再填写真实配置；应用运行时只会自动加载 `.env`。
 - 可直接执行：`cp .env.template .env`
+- `.env` 仍然是推荐的持久化配置方式。运行时会按固定优先级选择一个 `.env` 文件并只加载这一份，避免在不同启动方式之间漂移到别的父目录配置。
+- `.env` 解析优先级如下：`WPS_ENV_FILE` 指向的文件；`WPS_ENV_ROOT` 或 OpenClaw 技能目录提示下的 `.env`；当前工作目录向上查找的 `.env`；启动入口附近向上查找的 `.env`；安装包目录向上查找的 `.env`。
+- 如果你通过 OpenClaw 部署，建议让技能启动路径稳定地落在技能目录内；如运行时支持，也可以只传递 `.env` 所在目录给 `WPS_ENV_ROOT`，配置内容本身依旧保存在 `.env` 文件中。
 - `google_html` 引擎默认复用 `WPS_PROXY_URL` 和 `WPS_ENGINE_TIMEOUT_SECONDS`；第三阶段额外支持 `WPS_GOOGLE_HTML_PERSIST_PROFILE`、`WPS_GOOGLE_HTML_PROFILE_DIR`、`WPS_GOOGLE_HTML_COOKIE_FILE` 与 `WPS_GOOGLE_HTML_STEALTH`。
 - 当 `WPS_GOOGLE_HTML_PERSIST_PROFILE=true` 且未显式指定 `WPS_GOOGLE_HTML_PROFILE_DIR` 时，程序会自动选择用户缓存目录下的 `web-prime-search/google-html-profile` 作为持久化 profile 目录。
 - `WPS_GOOGLE_HTML_COOKIE_FILE` 为可选项，仅在你想显式导入或回写 Google cookie 时才需要配置；文件损坏或不可写时会跳过，不会阻塞搜索。

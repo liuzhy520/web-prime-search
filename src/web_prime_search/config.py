@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import __main__ as runtime_main
 import functools
 import os
 from pathlib import Path
+import sys
 from typing import List
 
 from pydantic_settings import BaseSettings
@@ -52,10 +54,26 @@ def _iter_env_candidates() -> tuple[Path, ...]:
             candidates.append(p)
             seen.add(p)
 
+    def _iter_parents(start: Path) -> tuple[Path, ...]:
+        try:
+            resolved = start.resolve()
+        except OSError:
+            return ()
+        return (resolved, *resolved.parents)
+
+    for directory in _iter_env_hint_directories():
+        _add(directory / ".env")
+
     # Primary: walk up from cwd
     cwd = Path.cwd().resolve()
     for directory in (cwd, *cwd.parents):
         _add(directory / ".env")
+
+    # Secondary: walk up from the runtime entrypoint path. This keeps OpenClaw
+    # and wrapper-script launches working even when cwd changes unexpectedly.
+    for root in _iter_runtime_entry_directories():
+        for directory in _iter_parents(root):
+            _add(directory / ".env")
 
     # Fallback: walk up from the package source directory (covers editable installs
     # launched from a cwd outside the project tree, e.g. via OpenClaw)
@@ -64,6 +82,67 @@ def _iter_env_candidates() -> tuple[Path, ...]:
         _add(directory / ".env")
 
     return tuple(candidates)
+
+
+def _iter_env_hint_directories() -> tuple[Path, ...]:
+    directories: list[Path] = []
+    seen: set[Path] = set()
+
+    def _add(raw_path: str) -> None:
+        if not raw_path.strip():
+            return
+        candidate = _normalize_runtime_path(raw_path)
+        if candidate is None:
+            return
+        directory = candidate if candidate.is_dir() else candidate.parent
+        if directory not in seen:
+            directories.append(directory)
+            seen.add(directory)
+
+    for env_name in (
+        "WPS_ENV_ROOT",
+        "OPENCLAW_SKILL_DIR",
+        "OPENCLAW_SKILL_ROOT",
+    ):
+        _add(os.environ.get(env_name, ""))
+
+    return tuple(directories)
+
+
+def _iter_runtime_entry_directories() -> tuple[Path, ...]:
+    directories: list[Path] = []
+    seen: set[Path] = set()
+
+    def _add(path: Path | None) -> None:
+        if path is None:
+            return
+        directory = path if path.is_dir() else path.parent
+        if directory not in seen:
+            directories.append(directory)
+            seen.add(directory)
+
+    argv0 = sys.argv[0].strip() if sys.argv else ""
+    _add(_normalize_runtime_path(argv0))
+
+    main_file = getattr(runtime_main, "__file__", "")
+    if isinstance(main_file, str):
+        _add(_normalize_runtime_path(main_file))
+
+    return tuple(directories)
+
+
+def _normalize_runtime_path(raw_path: str) -> Path | None:
+    if not raw_path.strip():
+        return None
+
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+
+    try:
+        return candidate.resolve()
+    except OSError:
+        return None
 
 
 def _resolve_env_files() -> tuple[str, ...]:
