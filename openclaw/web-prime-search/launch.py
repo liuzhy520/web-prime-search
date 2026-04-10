@@ -8,8 +8,8 @@ import sys
 def _build_env(repo_root: Path, skill_root: Path) -> dict[str, str]:
     env = os.environ.copy()
     env.setdefault("WPS_ENV_ROOT", str(repo_root))
-    env.setdefault("OPENCLAW_SKILL_DIR", str(skill_root))
-    env.setdefault("OPENCLAW_SKILL_ROOT", str(skill_root))
+    env.setdefault("OPENCLAW_SKILL_DIR", str(repo_root))
+    env.setdefault("OPENCLAW_SKILL_ROOT", str(repo_root))
 
     src_dir = repo_root / "src"
     existing_pythonpath = env.get("PYTHONPATH", "")

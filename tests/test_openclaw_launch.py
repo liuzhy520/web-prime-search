@@ -35,8 +35,8 @@ def test_build_env_sets_openclaw_defaults(monkeypatch, tmp_path: Path) -> None:
     env = module._build_env(repo_root, skill_root)
 
     assert env["WPS_ENV_ROOT"] == str(repo_root)
-    assert env["OPENCLAW_SKILL_DIR"] == str(skill_root)
-    assert env["OPENCLAW_SKILL_ROOT"] == str(skill_root)
+    assert env["OPENCLAW_SKILL_DIR"] == str(repo_root)
+    assert env["OPENCLAW_SKILL_ROOT"] == str(repo_root)
     assert env["PYTHONPATH"].split(module.os.pathsep)[0] == str(repo_root / "src")
     assert env["PYTHONPATH"].split(module.os.pathsep)[1] == "existing-path"
 
@@ -78,6 +78,6 @@ def test_main_execs_repo_local_module(monkeypatch) -> None:
     env = captured["env"]
     assert isinstance(env, dict)
     assert env["WPS_ENV_ROOT"] == str(repo_root)
-    assert env["OPENCLAW_SKILL_DIR"] == str(skill_root)
-    assert env["OPENCLAW_SKILL_ROOT"] == str(skill_root)
+    assert env["OPENCLAW_SKILL_DIR"] == str(repo_root)
+    assert env["OPENCLAW_SKILL_ROOT"] == str(repo_root)
     assert env["PYTHONPATH"].split(module.os.pathsep)[0] == str(repo_root / "src")
