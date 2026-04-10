@@ -2,6 +2,12 @@
 
 ## 里程碑 Milestone
 
+### v0.3.5 (2026-04-10)
+- 新增 OpenClaw skill 包装层，支持 repo-local launcher（openclaw/web-prime-search/launch.py）和 SKILL.md，免系统级安装。
+- launcher 自动设置 WPS_ENV_ROOT、OPENCLAW_SKILL_DIR、PYTHONPATH，确保 OpenClaw 场景下配置和源码可用。
+- README 增加 OpenClaw 部署与使用说明。
+- 新增定向测试，验证 launcher 环境变量、解释器选择、MCP 工具注册和配置发现。
+
 
 ### v0.3.4 (2026-04-09)
 - `.env` 配置发现顺序增强，支持 OpenClaw 技能目录、cwd、入口路径多重兜底，重启/切换上下文后依然能稳定找到正确配置
@@ -117,6 +123,15 @@ python -m web_prime_search.engines.x "coding plan"
 ```
 
 命令行结果会以 JSON 输出，便于脚本消费。
+
+### OpenClaw 技能接入
+
+- 仓库内已经提供 OpenClaw 技能包装目录 [openclaw/web-prime-search](openclaw/web-prime-search)。
+- OpenClaw 启动时优先使用仓库内 launcher：`python3 openclaw/web-prime-search/launch.py serve`。
+- 这个 launcher 会优先复用仓库根目录下的 `.venv`，并自动设置 `WPS_ENV_ROOT`、`OPENCLAW_SKILL_DIR`、`OPENCLAW_SKILL_ROOT`，确保应用稳定读取仓库根目录 `.env`。
+- launcher 同时会把仓库 `src/` 注入 `PYTHONPATH`，因此 OpenClaw 可以直接运行当前源码，不需要把本项目重新打包到系统 Python。
+- 如果仓库内 `.venv` 还不存在，可在仓库根目录执行 `python3 -m venv .venv && .venv/bin/pip install -e .`；这仍然是 repo-local 安装，不会写入系统级 site-packages。
+- OpenClaw 场景下依然使用 MCP 工具名 `web_search`。
 
 ## Copilot 多 Agent 工作流说明
 
