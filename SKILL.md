@@ -14,6 +14,9 @@ metadata:
       - name: prepare-repo-venv
         command: python3 -m venv .venv && .venv/bin/pip install -e .
         description: Create a repo-local virtualenv and install the package in editable mode when dependencies are not present yet.
+    run:
+      command: python3 openclaw/web-prime-search/launch.py serve
+      description: Start the MCP server. Run from the repository root (the directory containing this SKILL.md).
 ---
 
 # Web Prime Search

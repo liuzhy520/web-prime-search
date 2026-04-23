@@ -3,6 +3,13 @@
 ## 里程碑 Milestone
 
 
+### v0.3.7 (2026-04-23)
+- 更新里程碑和版本号，确保所有更改已同步。
+- 修复 Hermes agent 对 `web_search` 工具的误解问题。
+- 添加 `run` 字段到 SKILL.md 文件。
+- 更新 README，加入隔离说明以澄清多 agent 工作流与 MCP 搜索功能的关系。
+- 验证 `launch.py` 的功能，确保搜索引擎正常工作。
+
 ### v0.3.6 (2026-04-10)
 - 里程碑、版本号同步：OpenClaw 技能定义、launcher、测试、文档全部切换为仓库根目录为技能根。
 - 仅保留根目录 SKILL.md，移除旧 skill 文件，所有环境变量和 discover 逻辑已对齐。
@@ -139,6 +146,10 @@ python -m web_prime_search.engines.x "coding plan"
 - launcher 同时会把仓库 `src/` 注入 `PYTHONPATH`，因此 OpenClaw 可以直接运行当前源码，不需要把本项目重新打包到系统 Python。
 - 如果仓库内 `.venv` 还不存在，可在仓库根目录执行 `python3 -m venv .venv && .venv/bin/pip install -e .`；这仍然是 repo-local 安装，不会写入系统级 site-packages。
 - OpenClaw 场景下依然使用 MCP 工具名 `web_search`。
+
+---
+
+> **注（针对 Agent）**：以下章节介绍本仓库的 VS Code Copilot 多 agent 协作工具链，是**开发内部工具**，与 `web_search` MCP 搜索功能无关。
 
 ## Copilot 多 Agent 工作流说明
 
