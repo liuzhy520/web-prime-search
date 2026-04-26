@@ -147,3 +147,81 @@ async def test_search_missing_snippet():
     assert len(results) == 1
     assert results[0].title == "No Snippet"
     assert results[0].snippet == ""
+
+
+@respx.mock
+async def test_search_sends_user_agent_header():
+    captured = {}
+
+    def capture(request):
+        captured["user-agent"] = request.headers.get("user-agent", "")
+        return Response(200, text=_HTML_TWO_RESULTS)
+
+    respx.get(_SEARCH_URL).mock(side_effect=capture)
+
+    await search("python", settings=_SETTINGS)
+
+    assert captured["user-agent"] != ""
+    assert "Mozilla" in captured["user-agent"]
+
+
+@respx.mock
+async def test_search_sends_referer_header():
+    captured = {}
+
+    def capture(request):
+        captured["referer"] = request.headers.get("referer", "")
+        return Response(200, text=_HTML_TWO_RESULTS)
+
+    respx.get(_SEARCH_URL).mock(side_effect=capture)
+
+    await search("python", settings=_SETTINGS)
+
+    assert captured["referer"] == "https://www.baidu.com/s"
+
+
+@respx.mock
+async def test_search_429_retries_and_succeeds():
+    call_count = 0
+
+    def side_effect(request):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return Response(429, text="Too Many Requests")
+        return Response(200, text=_HTML_TWO_RESULTS)
+
+    respx.get(_SEARCH_URL).mock(side_effect=side_effect)
+
+    settings = Settings(baidu_retry_attempts=3, baidu_retry_delay=0.0)
+    results = await search("python", settings=settings)
+
+    assert len(results) == 2
+    assert call_count == 2
+
+
+@respx.mock
+async def test_search_429_exhausted_raises():
+    respx.get(_SEARCH_URL).mock(return_value=Response(429, text="Too Many Requests"))
+
+    settings = Settings(baidu_retry_attempts=3, baidu_retry_delay=0.0)
+    with pytest.raises(ValueError, match="Baidu search error: HTTP 429"):
+        await search("python", settings=settings)
+
+
+@respx.mock
+async def test_search_403_no_retry():
+    call_count = 0
+
+    def side_effect(request):
+        nonlocal call_count
+        call_count += 1
+        return Response(403, text="Forbidden")
+
+    respx.get(_SEARCH_URL).mock(side_effect=side_effect)
+
+    settings = Settings(baidu_retry_attempts=3, baidu_retry_delay=0.0)
+    with pytest.raises(ValueError, match="Baidu search error: HTTP 403"):
+        await search("python", settings=settings)
+
+    assert call_count == 1

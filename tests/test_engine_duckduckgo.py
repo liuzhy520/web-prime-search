@@ -34,7 +34,7 @@ async def test_search_returns_results(mock_ddgs) -> None:
     results = await search("test query", settings=settings)
 
     mock_ddgs.assert_called_once_with(proxy="http://127.0.0.1:7897", timeout=35)
-    instance.text.assert_called_once_with("test query", max_results=10, backend="duckduckgo")
+    instance.text.assert_called_once_with("test query", max_results=10, backend="duckduckgo", region="wt-wt", safesearch="moderate")
     assert len(results) == 2
     assert results[0].source == "duckduckgo"
     assert results[0].url == "https://example.com/1"
@@ -99,7 +99,7 @@ async def test_search_respects_max_results(mock_ddgs) -> None:
     results = await search("test query", max_results=2)
 
     assert len(results) == 2
-    instance.text.assert_called_once_with("test query", max_results=2, backend="duckduckgo")
+    instance.text.assert_called_once_with("test query", max_results=2, backend="duckduckgo", region="wt-wt", safesearch="moderate")
 
 
 @patch("web_prime_search.engines.duckduckgo.DDGS")
@@ -130,3 +130,73 @@ async def test_search_normalizes_generic_ddgs_errors(mock_ddgs) -> None:
 
     with pytest.raises(ValueError, match="DuckDuckGo search error: backend unavailable"):
         await search("test query")
+
+
+@patch("web_prime_search.engines.duckduckgo.DDGS")
+async def test_search_passes_region(mock_ddgs) -> None:
+    instance = MagicMock()
+    instance.text.return_value = []
+    mock_ddgs.return_value.__enter__.return_value = instance
+
+    settings = Settings(duckduckgo_region="us-en")
+    await search("test query", settings=settings)
+
+    call_kwargs = instance.text.call_args[1]
+    assert call_kwargs["region"] == "us-en"
+
+
+@patch("web_prime_search.engines.duckduckgo.DDGS")
+async def test_search_passes_safesearch(mock_ddgs) -> None:
+    instance = MagicMock()
+    instance.text.return_value = []
+    mock_ddgs.return_value.__enter__.return_value = instance
+
+    settings = Settings(duckduckgo_safesearch="off")
+    await search("test query", settings=settings)
+
+    call_kwargs = instance.text.call_args[1]
+    assert call_kwargs["safesearch"] == "off"
+
+
+@patch("web_prime_search.engines.duckduckgo.DDGS")
+async def test_search_backend_fallback_on_ddgs_error(mock_ddgs) -> None:
+    instance = MagicMock()
+    fallback_result = [
+        {"title": "Fallback", "href": "https://example.com/fallback", "body": "ok"}
+    ]
+    instance.text.side_effect = [DDGSException("backend down"), fallback_result]
+    mock_ddgs.return_value.__enter__.return_value = instance
+
+    settings = Settings(duckduckgo_backend_fallback=True)
+    results = await search("test query", settings=settings)
+
+    assert len(results) == 1
+    assert results[0].url == "https://example.com/fallback"
+    assert instance.text.call_count == 2
+    assert instance.text.call_args_list[1][1]["backend"] == "lite"
+
+
+@patch("web_prime_search.engines.duckduckgo.DDGS")
+async def test_search_no_fallback_on_rate_limit(mock_ddgs) -> None:
+    instance = MagicMock()
+    instance.text.side_effect = RatelimitException("rate limited")
+    mock_ddgs.return_value.__enter__.return_value = instance
+
+    settings = Settings(duckduckgo_backend_fallback=True)
+    with pytest.raises(ValueError, match="DuckDuckGo search rate limited"):
+        await search("test query", settings=settings)
+
+    assert instance.text.call_count == 1
+
+
+@patch("web_prime_search.engines.duckduckgo.DDGS")
+async def test_search_fallback_disabled(mock_ddgs) -> None:
+    instance = MagicMock()
+    instance.text.side_effect = DDGSException("backend down")
+    mock_ddgs.return_value.__enter__.return_value = instance
+
+    settings = Settings(duckduckgo_backend_fallback=False)
+    with pytest.raises(ValueError, match="DuckDuckGo search error: backend down"):
+        await search("test query", settings=settings)
+
+    assert instance.text.call_count == 1

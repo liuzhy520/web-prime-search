@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import random
 import re
 from html import unescape
 
@@ -11,6 +13,13 @@ from web_prime_search.proxy import get_http_client
 _SEARCH_URL = "https://www.baidu.com/s"
 
 
+def _select_user_agent(settings: Settings) -> str:
+    agents = settings.baidu_user_agents
+    if not agents:
+        return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+    return random.choice(agents)
+
+
 async def search(
     query: str,
     max_results: int = 10,
@@ -19,26 +28,36 @@ async def search(
     if settings is None:
         settings = get_settings()
 
+    user_agent = _select_user_agent(settings)
     headers: dict[str, str] = {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "User-Agent": user_agent,
+        "Referer": "https://www.baidu.com/s",
     }
 
     client = get_http_client("baidu", settings)
     try:
         rn = min(max_results, 50)
-        resp = await client.get(
-            _SEARCH_URL,
-            params={"wd": query, "rn": rn},
-            headers=headers,
-        )
-
-        if resp.status_code != 200:
+        last_exc: Exception | None = None
+        for attempt in range(settings.baidu_retry_attempts):
+            resp = await client.get(
+                _SEARCH_URL,
+                params={"wd": query, "rn": rn},
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                html = resp.text
+                results = _parse_results(html)
+                return results[:max_results]
+            if resp.status_code == 429:
+                last_exc = ValueError(f"Baidu search error: HTTP 429")
+                if attempt < settings.baidu_retry_attempts - 1:
+                    delay = settings.baidu_retry_delay * (2 ** attempt)
+                    await asyncio.sleep(delay)
+                continue
             raise ValueError(f"Baidu search error: HTTP {resp.status_code}")
-
-        html = resp.text
-        results = _parse_results(html)
-        return results[:max_results]
+        raise last_exc or ValueError("Baidu search failed")
     finally:
         await client.aclose()
 

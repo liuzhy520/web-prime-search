@@ -30,6 +30,7 @@ async def search(
             max_results,
             proxy,
             timeout,
+            settings,
         )
     except TimeoutException as exc:
         raise ValueError("DuckDuckGo search timed out") from exc
@@ -47,9 +48,30 @@ def _run_search(
     max_results: int,
     proxy: str | None,
     timeout: int | None,
+    settings: Settings,
 ) -> list[dict[str, Any]]:
+    region = settings.duckduckgo_region
+    safesearch = settings.duckduckgo_safesearch
+    backend_fallback = settings.duckduckgo_backend_fallback
     with DDGS(proxy=proxy, timeout=timeout) as client:
-        return client.text(query, max_results=max_results, backend="duckduckgo")
+        try:
+            return client.text(
+                query,
+                max_results=max_results,
+                backend="duckduckgo",
+                region=region,
+                safesearch=safesearch,
+            )
+        except (DDGSException, TimeoutException) as exc:
+            if not backend_fallback or isinstance(exc, RatelimitException):
+                raise
+        return client.text(
+            query,
+            max_results=max_results,
+            backend="lite",
+            region=region,
+            safesearch=safesearch,
+        )
 
 
 def _build_results(items: list[dict[str, Any]]) -> list[SearchResult]:

@@ -26,6 +26,20 @@ class Settings(BaseSettings):
     google_html_profile_dir: str = ""
     google_html_cookie_file: str = ""
     google_html_stealth: bool = True
+    google_html_browser_attempts: int = 2
+    google_html_browser_retry_delay: float = 3.0
+    duckduckgo_region: str = "wt-wt"
+    duckduckgo_safesearch: str = "moderate"
+    duckduckgo_backend_fallback: bool = True
+    baidu_user_agents: List[str] = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
+    ]
+    baidu_retry_attempts: int = 3
+    baidu_retry_delay: float = 2.0
     search_priority: List[str] = [
         "google",
         "duckduckgo",

@@ -172,6 +172,8 @@ async def _search_via_http(
             follow_redirects=True,
         )
 
+        if response.status_code == 429:
+            raise ValueError("Google HTML search rate limited: HTTP 429")
         if response.status_code != 200:
             raise ValueError(f"Google HTML search error: HTTP {response.status_code}")
 
@@ -197,26 +199,33 @@ async def _search_via_browser(
     except ImportError as exc:
         raise ValueError("Playwright browser fallback is not installed") from exc
 
-    try:
-        return await asyncio.wait_for(
-            _run_browser_search(
-                query=query,
-                max_results=max_results,
-                settings=settings,
-                async_playwright=async_playwright,
-                playwright_timeout_error=PlaywrightTimeoutError,
-            ),
-            timeout=_resolve_browser_timeout_budget(settings.engine_timeout_seconds),
-        )
-    except ValueError:
-        raise
-    except asyncio.TimeoutError as exc:
-        raise ValueError("Google HTML browser fallback timed out") from exc
-    except PlaywrightTimeoutError as exc:
-        raise ValueError("Google HTML browser fallback timed out") from exc
-    except PlaywrightError as exc:
-        message = str(exc).strip() or exc.__class__.__name__
-        raise ValueError(f"Google HTML browser fallback error: {message}") from exc
+    attempts = settings.google_html_browser_attempts
+    retry_delay = settings.google_html_browser_retry_delay
+    last_exc: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            return await asyncio.wait_for(
+                _run_browser_search(
+                    query=query,
+                    max_results=max_results,
+                    settings=settings,
+                    async_playwright=async_playwright,
+                    playwright_timeout_error=PlaywrightTimeoutError,
+                ),
+                timeout=_resolve_browser_timeout_budget(settings.engine_timeout_seconds),
+            )
+        except ValueError:
+            raise
+        except asyncio.TimeoutError as exc:
+            last_exc = ValueError("Google HTML browser fallback timed out")
+        except PlaywrightTimeoutError as exc:
+            last_exc = ValueError("Google HTML browser fallback timed out")
+        except PlaywrightError as exc:
+            message = str(exc).strip() or exc.__class__.__name__
+            last_exc = ValueError(f"Google HTML browser fallback error: {message}")
+        if attempt < attempts - 1:
+            await asyncio.sleep(retry_delay)
+    raise last_exc or ValueError("Google HTML browser fallback failed")
 
 
 async def _run_browser_search(

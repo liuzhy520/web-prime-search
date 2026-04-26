@@ -406,3 +406,34 @@ async def test_open_browser_context_falls_back_to_ephemeral_when_persistent_prof
     assert resolved_context is context
     assert resolved_browser is browser
     browser.new_context.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_http_429_raises_rate_limited_error() -> None:
+    respx.get(_SEARCH_URL).mock(return_value=Response(429))
+
+    with pytest.raises(ValueError, match="Google HTML search rate limited: HTTP 429"):
+        await search("query", settings=_SETTINGS)
+
+
+@pytest.mark.asyncio
+@patch("web_prime_search.engines.google_html._run_browser_search", new_callable=AsyncMock)
+@respx.mock
+async def test_search_browser_retries_on_transient_error(mock_run_browser: AsyncMock) -> None:
+    from playwright.async_api import Error as PlaywrightError
+
+    expected_result = [
+        SearchResult(title="Retry Result", url="https://example.com/retry", snippet="ok", source="google_html")
+    ]
+    mock_run_browser.side_effect = [PlaywrightError("transient"), expected_result]
+
+    html = '<html><body><noscript><meta content="0;url=/httpservice/retry/enablejs?sei=test" http-equiv="refresh"></noscript></body></html>'
+    respx.get(_SEARCH_URL).mock(return_value=Response(200, text=html))
+
+    settings = Settings(google_html_browser_attempts=2, google_html_browser_retry_delay=0.0)
+    results = await search("query", settings=settings)
+
+    assert len(results) == 1
+    assert results[0].title == "Retry Result"
+    assert mock_run_browser.call_count == 2
