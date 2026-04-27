@@ -1,7 +1,7 @@
 ---
 name: web-prime-search
-version: v0.3.7
-date: 2026-04-10
+version: v0.3.8
+date: 2026-04-27
 description: "OpenClaw web search skill for Google, DuckDuckGo, Douyin, Baidu, X, and Google HTML via MCP. Use when the agent needs web search, multi-engine search, or an OpenClaw search tool without system-level packaging."
 metadata:
   openclaw:

@@ -3,12 +3,18 @@
 ## 里程碑 Milestone
 
 
+
+### v0.3.8 (2026-04-27)
+- 搜索引擎鲁棒性升级：
+	- DuckDuckGo 增加 backend fallback（duckduckgo→lite），支持 region/safesearch 参数
+	- Baidu 增加 User-Agent 随机轮换、Referer 头、429 重试（指数退避）
+	- Google HTML 明确 429 检测，Playwright 浏览器回退支持自动重试
+- 新增 7 个配置项，详见 config.py
+- 测试用例新增 12 项，全部通过
+- 版本号、SKILL.md、__init__.py、README 里程碑同步
+---
 ### v0.3.7 (2026-04-23)
-- 更新里程碑和版本号，确保所有更改已同步。
-- 修复 Hermes agent 对 `web_search` 工具的误解问题。
-- 添加 `run` 字段到 SKILL.md 文件。
-- 更新 README，加入隔离说明以澄清多 agent 工作流与 MCP 搜索功能的关系。
-- 验证 `launch.py` 的功能，确保搜索引擎正常工作。
+...existing code...
 
 ### v0.3.6 (2026-04-10)
 - 里程碑、版本号同步：OpenClaw 技能定义、launcher、测试、文档全部切换为仓库根目录为技能根。
