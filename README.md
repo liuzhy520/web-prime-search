@@ -2,7 +2,10 @@
 
 ## 里程碑 Milestone
 
-
+### v0.3.9 (2026-04-28)
+- 根目录新增 launch.py shim，Hermes/agent 可直接发现 launcher，无需指定嵌套路径
+- 所有主流搜索引擎（baidu、cli、douyin、duckduckgo、google_html、google、x）测试全部通过
+- SKILL.md、README、__init__.py、pyproject.toml 版本号和里程碑同步
 
 ### v0.3.8 (2026-04-27)
 - 搜索引擎鲁棒性升级：
@@ -147,7 +150,7 @@ python -m web_prime_search.engines.x "coding plan"
 ### OpenClaw 技能接入
 
 - OpenClaw 技能定义文件位于仓库根目录 [SKILL.md](SKILL.md)。
-- 仓库内 launcher 位于 [openclaw/web-prime-search/launch.py](openclaw/web-prime-search/launch.py)，启动时使用：`python3 openclaw/web-prime-search/launch.py serve`。
+- 仓库内 launcher 位于 [openclaw/web-prime-search/launch.py](openclaw/web-prime-search/launch.py)，启动时使用：`python3 openclaw/web-prime-search/launch.py serve`。根目录也提供了快捷入口 [launch.py](launch.py)，`python3 launch.py serve` 效果完全相同，方便从默认工作目录直接调用。
 - 这个 launcher 会优先复用仓库根目录下的 `.venv`，并自动设置 `WPS_ENV_ROOT`、`OPENCLAW_SKILL_DIR`、`OPENCLAW_SKILL_ROOT` 到仓库根目录，确保应用稳定读取仓库根目录 `.env`。
 - launcher 同时会把仓库 `src/` 注入 `PYTHONPATH`，因此 OpenClaw 可以直接运行当前源码，不需要把本项目重新打包到系统 Python。
 - 如果仓库内 `.venv` 还不存在，可在仓库根目录执行 `python3 -m venv .venv && .venv/bin/pip install -e .`；这仍然是 repo-local 安装，不会写入系统级 site-packages。

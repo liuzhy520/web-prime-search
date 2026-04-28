@@ -1,7 +1,7 @@
 ---
 name: web-prime-search
-version: v0.3.8
-date: 2026-04-27
+version: v0.3.9
+date: 2026-04-28
 description: "OpenClaw web search skill for Google, DuckDuckGo, Douyin, Baidu, X, and Google HTML via MCP. Use when the agent needs web search, multi-engine search, or an OpenClaw search tool without system-level packaging."
 metadata:
   openclaw:
@@ -56,5 +56,6 @@ python3 openclaw/web-prime-search/launch.py search --query "今天有什么热�
 ## Notes For Agents
 
 - Prefer the launcher at `openclaw/web-prime-search/launch.py` over system-level `pip install` or wheel packaging.
+- `launch.py` at the repository root is also available as a convenience alias — `python3 launch.py serve` works identically and is easier to find from the default working directory.
 - If the repository `.venv` does not exist yet, create it inside the repository and install dependencies there.
 - Do not rename the MCP tool to `web_prime_search`; the tool name is `web_search`.
